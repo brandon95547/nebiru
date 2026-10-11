@@ -1,4 +1,7 @@
-@import "tailwindcss";
+/* Only src/ holds class names. Left to scan the whole project, Tailwind also
+   watches the README and the server's Python files, and reloads the app
+   (abandoning any book being written) whenever one of them is saved. */
+@import "tailwindcss" source("./");
 @import "./styles/book.css";
 
 /* Semantic tokens. Every color is an alias of a Tailwind palette step, so the
