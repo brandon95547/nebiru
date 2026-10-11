@@ -102,9 +102,12 @@ export function sectionsFromBlocks(blocks: TextBlock[]): ParsedSection[] {
     if (block.kind === 'heading' && block.level === splitLevel) {
       sections.push(current)
       current = { title: block.text, paragraphs: [] }
-    } else if (!(block.kind === 'heading' && block.level < splitLevel)) {
-      // Shallower headings are document titles, not body text.
+    } else if (block.kind === 'text') {
       current.paragraphs.push(block.text)
+    } else if (block.level > splitLevel) {
+      // A heading inside a chapter stays a heading on the page. Shallower ones
+      // are document titles, not body text, and are dropped.
+      current.paragraphs.push(`## ${block.text}`)
     }
   }
   sections.push(current)

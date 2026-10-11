@@ -86,6 +86,17 @@
   list-style: disc;
 }
 
+/* List entries are short lines, not prose: no justification, indent or splitting. */
+.bk-flow li {
+  break-inside: avoid;
+}
+
+.bk-flow li p {
+  text-align: left;
+  text-indent: 0;
+  hyphens: manual;
+}
+
 .bk-flow ol {
   list-style: decimal;
 }

@@ -66,7 +66,7 @@ describe('sectionsFromBlocks', () => {
       { kind: 'text', text: prose('C') },
     ])
     expect(sections.map((s) => s.title)).toEqual(['First', 'Second'])
-    expect(sections[0].paragraphs).toEqual([prose('A'), 'A detail', prose('B')])
+    expect(sections[0].paragraphs).toEqual([prose('A'), '## A detail', prose('B')])
   })
 })
 

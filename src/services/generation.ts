@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { isContentsTitle } from '@/lib/chapters'
 import { buildChapterDoc, listIllustrations, newIllustration } from '@/lib/doc'
 import { findIllustration, liveEditor, patchLiveIllustration } from '@/store/editorHub'
 import { getBook, patchBook, patchChapter, patchStoredIllustration, updateBook } from '@/store/library'
@@ -130,8 +131,13 @@ export async function writeChapter(bookId: string, chapterId: string, instructio
       sourceParagraphs: sourceParagraphs(book, chapter),
       instruction,
     })
-    const illustrations = draft.illustrationPrompts.map((prompt) => newIllustration({ prompt }))
-    const content = buildChapterDoc(draft.paragraphs, illustrations)
+    // A table of contents is a list, not prose to wrap around a picture: its
+    // illustration sits above it, wide and centred.
+    const lead = isContentsTitle(chapter.title)
+    const illustrations = draft.illustrationPrompts.map((prompt, i) =>
+      newIllustration(lead && i === 0 ? { prompt, aspect: 3 / 2, widthPct: 72 } : { prompt }),
+    )
+    const content = buildChapterDoc(draft.paragraphs, illustrations, { lead })
     updateBook(bookId, (current) => ({
       ...current,
       chapters: current.chapters.map((c) =>

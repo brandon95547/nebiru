@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { buildChapterDoc, docText, docWordCount, listIllustrations, newIllustration, patchIllustration } from './doc'
+import { chapterNumbers, isContentsTitle } from './chapters'
+import {
+  buildChapterDoc,
+  docText,
+  docWordCount,
+  listIllustrations,
+  newIllustration,
+  paragraphNode,
+  paragraphsToNodes,
+  patchIllustration,
+} from './doc'
 
 describe('buildChapterDoc', () => {
   it('places illustrations among the paragraphs, never before the first', () => {
@@ -31,5 +41,62 @@ describe('document helpers', () => {
     const next = patchIllustration(doc, illustration.id, { status: 'ready', src: 'x.png' })
     expect(listIllustrations(next)[0]).toMatchObject({ status: 'ready', src: 'x.png', prompt: 'a lighthouse' })
     expect(listIllustrations(doc)[0].status).toBe('empty')
+  })
+})
+
+describe('paragraphsToNodes', () => {
+  it('reads headings and lists from the markup importers leave', () => {
+    const nodes = paragraphsToNodes(['## Basic', '1. Beloved Ancestors', '2. Changing Luck', '## WLS', '1. Peace', '- A bullet', 'Plain text.'])
+    expect(nodes.map((node) => node.type)).toEqual(['heading', 'orderedList', 'heading', 'orderedList', 'bulletList', 'paragraph'])
+    expect(nodes[0]).toEqual({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Basic' }] })
+    expect(nodes[1].content).toHaveLength(2)
+    expect(docText({ type: 'doc', content: nodes })).toContain('Beloved Ancestors')
+  })
+
+  it('keeps the page\'s own numbers and starts a new list when they restart', () => {
+    const nodes = paragraphsToNodes(['16. Spirit', '17. Success Under Fire', '1. Wonderful Sex', '5. Out of order'])
+    expect(nodes.map((node) => [node.attrs?.start, node.content?.length])).toEqual([
+      [16, 2],
+      [1, 1],
+      [5, 1],
+    ])
+  })
+
+  it('leaves ordinary sentences that begin with a number alone', () => {
+    expect(paragraphsToNodes(['1984 was a hard year.', '12 people came.']).map((node) => node.type)).toEqual(['paragraph', 'paragraph'])
+  })
+
+  it('keeps the lines of verse on separate lines', () => {
+    expect(paragraphNode('O mighty Ancestors,\nGuardians and Guides')).toEqual({
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'O mighty Ancestors,' }, { type: 'hardBreak' }, { type: 'text', text: 'Guardians and Guides' }],
+    })
+  })
+
+  it('can lead a list page with its illustration, centred', () => {
+    const doc = buildChapterDoc(['## Basic', '1. One', '2. Two'], [newIllustration({ prompt: 'emblem' })], { lead: true })
+    expect(doc.content?.[0].type).toBe('illustration')
+    expect(doc.content?.[0].attrs?.placement).toBe('center')
+    expect(doc.content?.map((node) => node.type)).toEqual(['illustration', 'heading', 'orderedList'])
+  })
+})
+
+describe('chapter numbering', () => {
+  it('numbers only the chapters that print a "Chapter N" line', () => {
+    expect(chapterNumbers(['Table of Contents', 'Introduction', 'First Light', 'Chapter 2: The Moon', 'The Planets', 'Epilogue'])).toEqual([
+      null,
+      null,
+      1,
+      null,
+      2,
+      null,
+    ])
+  })
+
+  it('recognises a chapter that is the table of contents', () => {
+    expect(['Table of Contents', 'contents', ' Contents ', 'TABLE OF CONTENTS · I', 'Contents (continued)', 'Contents, Part Two'].map(isContentsTitle)).toEqual(
+      [true, true, true, true, true, true],
+    )
+    expect(['Contents of the Chest', 'The Table', 'Index'].map(isContentsTitle)).toEqual([false, false, false])
   })
 })

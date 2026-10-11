@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { BookCover } from '@/components/BookCover'
 import { BODY_FONTS, fontStack, HEADING_FONTS, type PageMetrics, pageMetrics } from '@/lib/bookFormats'
+import { chapterNumbers, isContentsTitle } from '@/lib/chapters'
 import { EMPTY_DOC } from '@/lib/doc'
 import { liveEditor } from '@/store/editorHub'
 import { patchChapter } from '@/store/library'
@@ -50,6 +51,11 @@ export interface StripLayout {
 
 export const EMPTY_LAYOUT: StripLayout = { sections: [], totalPages: 0 }
 
+/** A chapter that is itself a table of contents (say, imported from a photo of one) replaces the generated page. */
+function hasOwnContents(book: Book): boolean {
+  return book.chapters.some((chapter) => isContentsTitle(chapter.title))
+}
+
 function computeLayout(book: Book, counts: Record<string, number>, includeCover: boolean): StripLayout {
   const sections: StripSection[] = []
   let start = 0
@@ -62,7 +68,9 @@ function computeLayout(book: Book, counts: Record<string, number>, includeCover:
 
   if (includeCover) add({ key: 'cover', kind: 'cover', label: 'Cover', pages: 1 }, false)
   add({ key: 'title', kind: 'title', label: 'Title page', pages: 1 }, false)
-  add({ key: 'contents', kind: 'contents', label: 'Contents', pages: counts.contents ?? 1 }, false)
+  if (!hasOwnContents(book)) {
+    add({ key: 'contents', kind: 'contents', label: 'Contents', pages: counts.contents ?? 1 }, false)
+  }
   book.chapters.forEach((chapter, index) => {
     add(
       {
@@ -197,8 +205,6 @@ function FlowSection({
   )
 }
 
-const OWN_LABEL = /^(?:chapter|part|book|prologue|epilogue|introduction|preface|foreword|afterword|appendix|conclusion)\b/i
-
 function ChapterTitle({ bookId, chapter, editable }: { bookId: string; chapter: Chapter; editable: boolean }) {
   const ref = useRef<HTMLHeadingElement>(null)
   const remeasure = useRemeasure()
@@ -242,7 +248,8 @@ const LIVE_MARGIN = '0px 2400px'
 interface ChapterSectionProps {
   bookId: string
   chapter: Chapter
-  number: number
+  /** The number printed above the title, or null for a chapter that carries none. */
+  number: number | null
   start: number
   firstNumber: number | null
   metrics: PageMetrics
@@ -278,7 +285,7 @@ const ChapterSection = memo(function ChapterSection({
   const live = editable && near
   return (
     <FlowSection sectionKey={chapter.id} sectionRef={setElement} {...flow}>
-      {!OWN_LABEL.test(chapter.title.trim()) && (
+      {number !== null && (
         <p className="bk-chapter-kicker" contentEditable={false}>
           Chapter {number}
         </p>
@@ -330,6 +337,7 @@ export function BookStrip({ book, editable, pageGap, includeCover = true, onLayo
 
   const flowProps = { metrics, pageGap, paragraphStyle: page.paragraphStyle, onPages }
   const contents = sections.get('contents')
+  const numbers = useMemo(() => chapterNumbers(book.chapters.map((chapter) => chapter.title)), [book.chapters])
 
   return (
     <div className="flex" style={style}>
@@ -358,19 +366,21 @@ export function BookStrip({ book, editable, pageGap, includeCover = true, onLayo
         </div>
       </Sheet>
 
-      <FlowSection sectionKey="contents" start={contents?.start ?? 0} firstNumber={null} {...flowProps}>
-        <h1 className="bk-chapter-title bk-contents-title">Contents</h1>
-        {layout.sections.map(
-          (section) =>
-            section.kind === 'chapter' && (
-              <div key={section.key} className="bk-toc-row">
-                <span>{section.label}</span>
-                <span aria-hidden className="bk-toc-dots" />
-                <span>{section.firstNumber}</span>
-              </div>
-            ),
-        )}
-      </FlowSection>
+      {contents && (
+        <FlowSection sectionKey="contents" start={contents.start} firstNumber={null} {...flowProps}>
+          <h1 className="bk-chapter-title bk-contents-title">Contents</h1>
+          {layout.sections.map(
+            (section) =>
+              section.kind === 'chapter' && (
+                <div key={section.key} className="bk-toc-row">
+                  <span>{section.label}</span>
+                  <span aria-hidden className="bk-toc-dots" />
+                  <span>{section.firstNumber}</span>
+                </div>
+              ),
+          )}
+        </FlowSection>
+      )}
 
       {book.chapters.map((chapter, index) => {
         const section = sections.get(chapter.id)
@@ -379,7 +389,7 @@ export function BookStrip({ book, editable, pageGap, includeCover = true, onLayo
             key={chapter.id}
             bookId={book.id}
             chapter={chapter}
-            number={index + 1}
+            number={numbers[index]}
             start={section?.start ?? 0}
             firstNumber={section?.firstNumber ?? null}
             editable={editable}

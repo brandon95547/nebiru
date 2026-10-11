@@ -39,7 +39,7 @@ describe('parseEpub', () => {
     expect(book.author).toBe('A. Mariner')
     expect(book.sections).toEqual([
       { title: 'The Harbour', paragraphs: ['Fog lay on the water.', 'Nobody spoke.'] },
-      { title: 'Open Sea', paragraphs: ['Night watch', 'The wind rose.'] },
+      { title: 'Open Sea', paragraphs: ['## Night watch', 'The wind rose.'] },
     ])
   })
 

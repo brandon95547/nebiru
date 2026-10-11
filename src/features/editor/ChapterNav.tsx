@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Ellipsis, ImagePlus, ListOrdered, Plus, RefreshCw, 
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Menu, Spinner } from '@/components/ui/Overlay'
+import { chapterNumbers } from '@/lib/chapters'
 import { EMPTY_DOC } from '@/lib/doc'
 import { cx } from '@/lib/util'
 import { insertChapter, moveChapter, newChapter } from '@/store/library'
@@ -55,6 +56,7 @@ export function ChapterNav({ book, layout, currentPage, onGoToPage, onRegenerate
     currentPage >= section.start && currentPage < section.start + section.pages
   const front = layout.sections.filter((section) => section.kind !== 'chapter')
   const chapters = layout.sections.filter((section) => section.kind === 'chapter')
+  const numbers = chapterNumbers(chapters.map((section) => section.label))
 
   const addChapter = () => {
     insertChapter(
@@ -84,7 +86,7 @@ export function ChapterNav({ book, layout, currentPage, onGoToPage, onRegenerate
               <NavRow
                 key={section.key}
                 section={section}
-                lead={String(index + 1)}
+                lead={numbers[index] === null ? '·' : String(numbers[index])}
                 active={isActive(section)}
                 onClick={() => onGoToPage(section.start)}
               >

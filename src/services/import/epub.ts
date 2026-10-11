@@ -52,7 +52,9 @@ export async function parseEpub(data: ArrayBuffer): Promise<ParsedDocument> {
     const blocks = extractBlocks(parseHtmlDocument(await file.async('string')).body)
     const firstHeading = blocks.findIndex((b) => b.kind === 'heading')
     const title = firstHeading >= 0 ? blocks[firstHeading].text : null
-    const paragraphs = blocks.filter((_, i) => i !== firstHeading).map((b) => b.text)
+    const paragraphs = blocks
+      .filter((_, i) => i !== firstHeading)
+      .map((b) => (b.kind === 'heading' ? `## ${b.text}` : b.text))
     if (paragraphs.length > 0) sections.push({ title, paragraphs })
   }
 
