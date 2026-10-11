@@ -46,7 +46,14 @@ export interface PageSettings {
   lineHeight: number
   paragraphStyle: 'indent' | 'spaced'
   justify: boolean
+  /** light: dark text on light paper, the way a book prints. dark: light text on dark pages. */
+  theme: PageTheme
 }
+
+export type PageTheme = 'light' | 'dark'
+
+/** A whole book, or one page meant to go into one (a contents page, a poem, a recipe). */
+export type BookKind = 'book' | 'page'
 
 export type ChapterStatus = 'planned' | 'writing' | 'ready' | 'error'
 
@@ -84,10 +91,13 @@ export interface SourceDocument {
 export type BookOrigin =
   | { kind: 'concept'; concept: string }
   /**
-   * preserve: lay out the imported text as written. adapt: write new prose from it.
-   * `instruction` is what the author asked Nebiru to make from the material.
+   * preserve: lay out the imported text as written. reword: say the same things,
+   * in the same order, in entirely new words. `instruction` is anything else the
+   * author asked for.
    */
-  | { kind: 'import'; mode: 'preserve' | 'adapt'; instruction?: string }
+  | { kind: 'import'; mode: ImportMode; instruction?: string }
+
+export type ImportMode = 'preserve' | 'reword'
 
 export interface CoverArt {
   src: string
@@ -108,6 +118,7 @@ export type BookStatus = 'planning' | 'generating' | 'ready'
 
 export interface Book {
   id: string
+  kind: BookKind
   title: string
   author: string
   description: string

@@ -8,6 +8,25 @@ import type { Book } from '@/types'
  */
 export function BookCover({ book, className }: { book: Book; className?: string }) {
   const style = illustrationStyle(book.coverStyle)
+  if (book.kind === 'page') {
+    // A single page has no cover: show the page itself, in its own paper and ink.
+    return (
+      <div
+        className={cx('bk-book bk-sheet @container relative grid place-items-center overflow-hidden', className)}
+        data-theme={book.page.theme}
+        style={{ aspectRatio: `${book.page.widthIn} / ${book.page.heightIn}` }}
+      >
+        <div className="p-[9cqw] text-center">
+          <h3 className="font-display text-[9.5cqw] leading-[1.1] font-semibold text-balance break-words" style={{ color: 'var(--bk-heading)' }}>
+            {book.title || 'Untitled'}
+          </h3>
+          <p className="mt-[5cqw] text-[4.2cqw] tracking-[0.22em] uppercase" style={{ color: 'var(--bk-ink-soft)' }}>
+            Single page
+          </p>
+        </div>
+      </div>
+    )
+  }
   return (
     <div
       className={cx('@container relative overflow-hidden bg-stone-800', className)}

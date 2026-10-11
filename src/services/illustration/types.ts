@@ -1,4 +1,4 @@
-import type { IllustrationStyleId } from '@/types'
+import type { IllustrationStyleId, PageTheme } from '@/types'
 
 /**
  * The illustration service: everything Nebiru asks an image model to do.
@@ -11,6 +11,8 @@ export interface IllustrationRequest {
   /** Width divided by height. */
   aspect: number
   purpose: 'interior' | 'cover'
+  /** The book's pages; a picture for dark pages is drawn on a dark ground. */
+  theme: PageTheme
   /** Reuse a seed to reproduce an image; omit for a fresh one. */
   seed?: number
 }

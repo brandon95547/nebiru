@@ -1,4 +1,4 @@
-import type { PageMargins, PageSettings } from '@/types'
+import type { BookKind, PageMargins, PageSettings, PageTheme } from '@/types'
 
 export const PX_PER_IN = 96
 const PX_PER_PT = PX_PER_IN / 72
@@ -58,6 +58,21 @@ export const DEFAULT_PAGE: PageSettings = {
   lineHeight: 1.45,
   paragraphStyle: 'indent',
   justify: true,
+  theme: 'light',
+}
+
+/** A single page starts on letter paper with even margins and slightly larger type. */
+const SINGLE_PAGE: PageSettings = {
+  ...DEFAULT_PAGE,
+  trimId: '8.5x11',
+  widthIn: 8.5,
+  heightIn: 11,
+  margins: { top: 0.9, bottom: 0.9, inside: 0.9, outside: 0.9 },
+  fontSizePt: 12,
+}
+
+export function defaultPage(kind: BookKind, theme: PageTheme): PageSettings {
+  return { ...(kind === 'page' ? SINGLE_PAGE : DEFAULT_PAGE), theme }
 }
 
 /** Page geometry in CSS pixels. */

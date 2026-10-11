@@ -1,9 +1,18 @@
 import type { JSONContent } from '@tiptap/core'
 import { create } from 'zustand'
-import { DEFAULT_PAGE } from '@/lib/bookFormats'
+import { defaultPage } from '@/lib/bookFormats'
 import { mapIllustrations, patchIllustration } from '@/lib/doc'
 import { uid } from '@/lib/util'
-import type { Book, BookOrigin, Chapter, IllustrationAttrs, SourceDocument } from '@/types'
+import type {
+  Book,
+  BookKind,
+  BookOrigin,
+  Chapter,
+  IllustrationAttrs,
+  IllustrationStyleId,
+  PageTheme,
+  SourceDocument,
+} from '@/types'
 import { deleteBook, keepInBrowser, loadBooks, saveBook, type StorageMode } from './persistence'
 
 /** The library: every book project, held in memory and saved as it changes. */
@@ -108,7 +117,15 @@ function settle(book: Book): Book {
         ? 'ready'
         : 'planning'
       : book.status
-  return { ...book, chapters, cover, status }
+  return { ...upgrade(book), chapters, cover, status }
+}
+
+/** Fill in what books saved by earlier versions do not have. */
+function upgrade(book: Book): Book {
+  const legacy = book as Book & { origin: { mode?: string } }
+  const origin: BookOrigin =
+    book.origin.kind === 'import' && legacy.origin.mode === 'adapt' ? { ...book.origin, mode: 'reword' } : book.origin
+  return { ...book, kind: book.kind ?? 'book', origin, page: { ...book.page, theme: book.page.theme ?? 'light' } }
 }
 
 export async function initLibrary(): Promise<void> {
@@ -135,12 +152,16 @@ export function patchBook(id: string, patch: Partial<Book>): void {
 }
 
 export interface NewBookInput {
+  kind: BookKind
   title: string
   author: string
   description: string
   origin: BookOrigin
   sources: SourceDocument[]
   chapters: Array<Pick<Chapter, 'title' | 'summary' | 'sourceSectionIds'>>
+  theme: PageTheme
+  interiorStyle: IllustrationStyleId
+  coverStyle: IllustrationStyleId
 }
 
 export function newChapter(partial: Partial<Chapter> = {}): Chapter {
@@ -160,6 +181,7 @@ export function createBook(input: NewBookInput): Book {
   const now = Date.now()
   const book: Book = {
     id: uid('book'),
+    kind: input.kind,
     title: input.title,
     author: input.author,
     description: input.description,
@@ -167,10 +189,10 @@ export function createBook(input: NewBookInput): Book {
     sources: input.sources,
     status: 'planning',
     chapters: input.chapters.map((chapter) => newChapter(chapter)),
-    interiorStyle: 'watercolor',
-    coverStyle: 'classical',
+    interiorStyle: input.interiorStyle,
+    coverStyle: input.coverStyle,
     cover: { src: '', prompt: '', status: 'empty', seed: null },
-    page: DEFAULT_PAGE,
+    page: defaultPage(input.kind, input.theme),
     chat: [],
     createdAt: now,
     updatedAt: now,

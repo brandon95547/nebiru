@@ -4,7 +4,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { AppHeader } from '@/components/AppHeader'
 import { StylePicker } from '@/components/StylePicker'
 import { Button, IconButton } from '@/components/ui/Button'
-import { Field, Input, Textarea } from '@/components/ui/Field'
+import { Field, Input, Segmented, Textarea } from '@/components/ui/Field'
 import { Spinner } from '@/components/ui/Overlay'
 import { cx, plural } from '@/lib/util'
 import { services } from '@/services'
@@ -66,6 +66,8 @@ function ChapterState({ chapter }: { chapter: Chapter }) {
 
 function TocRow({ book, chapter, index, locked }: { book: Book; chapter: Chapter; index: number; locked: boolean }) {
   const number = index + 1
+  // A single page is one entry: there is nothing to reorder or remove.
+  const single = book.kind === 'page'
   return (
     <li className="flex gap-3 px-5 py-4">
       <span className="w-6 shrink-0 pt-2 text-right text-ink-mute tabular-nums">{number}</span>
@@ -89,6 +91,7 @@ function TocRow({ book, chapter, index, locked }: { book: Book; chapter: Chapter
         />
         <ChapterState chapter={chapter} />
       </div>
+      {!single && (
       <div className="flex shrink-0 flex-col">
         <IconButton label={`Move chapter ${number} up`} disabled={locked || index === 0} onClick={() => moveChapter(book.id, chapter.id, -1)}>
           <ArrowUp className="size-4" />
@@ -104,6 +107,7 @@ function TocRow({ book, chapter, index, locked }: { book: Book; chapter: Chapter
           <Trash2 className="size-4" />
         </IconButton>
       </div>
+      )}
     </li>
   )
 }
@@ -186,10 +190,9 @@ function OutlineAssistant({ book, locked }: { book: Book; locked: boolean }) {
 
 function sourceLine(book: Book): string {
   if (book.origin.kind === 'concept') return 'Written from your concept.'
-  const files = plural(book.sources.length, 'imported file')
   return book.origin.mode === 'preserve'
-    ? `Keeps the text of ${files} as written.`
-    : `An original adaptation of ${files}.`
+    ? 'Keeps the imported text exactly as written.'
+    : 'Says what the imported text says, rewritten in new words throughout.'
 }
 
 export function PlanPage() {
@@ -207,6 +210,7 @@ export function PlanPage() {
 
   if (!book) return <Navigate to="/" replace />
 
+  const isPage = book.kind === 'page'
   const total = book.chapters.length
   const written = book.chapters.filter((chapter) => chapter.status === 'ready').length
   const remaining = total - written
@@ -223,9 +227,11 @@ export function PlanPage() {
         <Link to="/" className="inline-flex items-center gap-2 rounded text-sm text-ink-soft hover:text-ink">
           <ArrowLeft className="size-4" /> Library
         </Link>
-        <h1 className="mt-4 font-display text-4xl text-ink">Plan the book</h1>
+        <h1 className="mt-4 font-display text-4xl text-ink">{isPage ? 'Your page' : 'Approve the table of contents'}</h1>
         <p className="mt-2 text-lg text-ink-soft">
-          Shape the outline until it is right. Nothing is written until you approve it.
+          {isPage
+            ? 'Check the title and the look, then make the page.'
+            : 'Nothing is written until you approve it. Change anything here first: retitle, reorder, add or remove chapters.'}
         </p>
 
         <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -256,17 +262,19 @@ export function PlanPage() {
             <section className="rounded-xl border border-line bg-panel">
               <div className="flex items-center justify-between border-b border-line px-5 py-4">
                 <div>
-                  <h2 className="font-medium text-ink">Table of contents</h2>
-                  <p className="text-sm text-ink-mute">{plural(total, 'chapter')}</p>
+                  <h2 className="font-medium text-ink">{isPage ? 'The page' : 'Table of contents'}</h2>
+                  {!isPage && <p className="text-sm text-ink-mute">{plural(total, 'chapter')}</p>}
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={running}
-                  onClick={() => insertChapter(book.id, total, newChapter())}
-                >
-                  <Plus className="size-4" /> Add chapter
-                </Button>
+                {!isPage && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={running}
+                    onClick={() => insertChapter(book.id, total, newChapter())}
+                  >
+                    <Plus className="size-4" /> Add chapter
+                  </Button>
+                )}
               </div>
               {total === 0 ? (
                 <p className="px-5 py-8 text-center text-ink-soft">No chapters yet. Add one to begin.</p>
@@ -280,13 +288,26 @@ export function PlanPage() {
             </section>
 
             <section className="rounded-xl border border-line bg-panel p-5">
-              <h2 className="font-medium text-ink">Illustration style</h2>
-              <p className="mt-1 text-sm text-ink-soft">
-                One style runs through every interior illustration; the cover can have its own.
-              </p>
-              <div className="mt-4 grid gap-6 sm:grid-cols-2">
+              <h2 className="font-medium text-ink">The look</h2>
+              <div className="mt-4 max-w-sm">
+                <Field
+                  label={isPage ? 'Page' : 'Pages'}
+                  hint={book.page.theme === 'dark' ? 'Dark pages suit the screen. Choose light for printing.' : 'Dark text on light paper, the way a book prints.'}
+                >
+                  <Segmented
+                    label="Page colour"
+                    value={book.page.theme}
+                    onChange={(theme) => patchBook(book.id, { page: { ...book.page, theme } })}
+                    options={[
+                      { value: 'light', label: 'Light' },
+                      { value: 'dark', label: 'Dark' },
+                    ]}
+                  />
+                </Field>
+              </div>
+              <div className={cx('mt-5 grid gap-6', !isPage && 'sm:grid-cols-2')}>
                 <div>
-                  <h3 className="mb-2 text-sm font-medium text-ink-soft">Interior</h3>
+                  <h3 className="mb-2 text-sm font-medium text-ink-soft">{isPage ? 'Illustration style' : 'Illustrations inside'}</h3>
                   <StylePicker
                     compact
                     label="Interior illustration style"
@@ -294,25 +315,29 @@ export function PlanPage() {
                     onChange={(interiorStyle) => patchBook(book.id, { interiorStyle })}
                   />
                 </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-medium text-ink-soft">Front cover</h3>
-                  <StylePicker
-                    compact
-                    label="Cover illustration style"
-                    value={book.coverStyle}
-                    onChange={(coverStyle) => patchBook(book.id, { coverStyle })}
-                  />
-                </div>
+                {!isPage && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium text-ink-soft">Front cover</h3>
+                    <StylePicker
+                      compact
+                      label="Cover illustration style"
+                      value={book.coverStyle}
+                      onChange={(coverStyle) => patchBook(book.id, { coverStyle })}
+                    />
+                  </div>
+                )}
               </div>
             </section>
           </div>
 
           <aside className="space-y-6 lg:sticky lg:top-24">
             <section className="rounded-xl border border-line bg-panel p-5">
-              <h2 className="font-medium text-ink">{running ? 'Writing the book' : 'Write the book'}</h2>
+              <h2 className="font-medium text-ink">
+                {isPage ? (running ? 'Making the page' : 'Make the page') : running ? 'Writing the book' : 'Write the book'}
+              </h2>
               <p className="mt-1 text-sm text-ink-soft">{sourceLine(book)}</p>
 
-              {(running || written > 0) && total > 0 && (
+              {!isPage && (running || written > 0) && total > 0 && (
                 <div className="mt-4">
                   <div
                     role="progressbar"
@@ -337,11 +362,15 @@ export function PlanPage() {
               ) : (
                 <Button className="mt-5 w-full" disabled={running || total === 0} onClick={start}>
                   {running ? <Spinner /> : <Sparkles className="size-4" />}
-                  {running
-                    ? 'Writing…'
-                    : written > 0
-                      ? `Write ${plural(remaining, 'remaining chapter')}`
-                      : `Approve and write ${plural(total, 'chapter')}`}
+                  {isPage
+                    ? running
+                      ? 'Making the page…'
+                      : 'Make the page'
+                    : running
+                      ? 'Writing…'
+                      : written > 0
+                        ? `Write ${plural(remaining, 'remaining chapter')}`
+                        : `Approve and write ${plural(total, 'chapter')}`}
                 </Button>
               )}
               {written > 0 && remaining > 0 && !running && (
@@ -351,7 +380,7 @@ export function PlanPage() {
               )}
             </section>
 
-            <OutlineAssistant book={book} locked={running} />
+            {!isPage && <OutlineAssistant book={book} locked={running} />}
           </aside>
         </div>
       </main>

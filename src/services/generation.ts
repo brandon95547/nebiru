@@ -88,6 +88,7 @@ export async function generateIllustration(bookId: string, chapterId: string, id
       styleId: book.interiorStyle,
       aspect: attrs.aspect,
       purpose: 'interior',
+      theme: book.page.theme,
     })
     writeIllustration(bookId, chapterId, id, { src: result.src, seed: result.seed, status: 'ready' })
   } catch (error) {
@@ -108,6 +109,7 @@ export async function generateCover(bookId: string): Promise<void> {
       styleId: book.coverStyle,
       aspect: book.page.widthIn / book.page.heightIn,
       purpose: 'cover',
+      theme: book.page.theme,
     })
     patchBook(bookId, { cover: { prompt, src: result.src, seed: result.seed, status: 'ready' } })
   } catch (error) {
@@ -163,7 +165,8 @@ export async function generateBook(bookId: string): Promise<void> {
       if (chapter && chapter.status !== 'ready') await writeChapter(bookId, id)
     }
     const book = getBook(bookId)
-    if (book && !book.cover.src) await generateCover(bookId)
+    // A single page has no cover.
+    if (book && book.kind !== 'page' && !book.cover.src) await generateCover(bookId)
   } finally {
     const book = getBook(bookId)
     if (book) {

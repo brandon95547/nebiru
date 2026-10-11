@@ -1,4 +1,4 @@
-import type { BookOrigin, ChatMessage, SourceDocument } from '@/types'
+import type { BookOrigin, ChatMessage, ImportMode, SourceDocument } from '@/types'
 
 /**
  * The writing service: everything Nebiru asks a language model to do.
@@ -22,7 +22,7 @@ export interface BookPlan {
 
 export type PlanInput =
   | { kind: 'concept'; concept: string; chapterCount: number }
-  | { kind: 'import'; mode: 'preserve' | 'adapt'; sources: SourceDocument[]; instruction?: string }
+  | { kind: 'import'; mode: ImportMode; sources: SourceDocument[]; instruction?: string }
 
 /** Compact description of the book, sent with every request as context. */
 export interface BookBrief {

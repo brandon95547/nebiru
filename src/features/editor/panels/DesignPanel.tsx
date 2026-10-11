@@ -74,6 +74,17 @@ export function DesignPanel({ book }: { book: Book }) {
   return (
     <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
       <Group title="Page">
+        <Field label="Pages" hint={page.theme === 'dark' ? 'Dark pages suit the screen. Choose light for printing.' : undefined}>
+          <Segmented
+            label="Page colour"
+            value={page.theme}
+            onChange={(theme) => setPage({ theme })}
+            options={[
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+          />
+        </Field>
         <Field label="Trim size">
           <Select
             value={page.trimId}
@@ -152,7 +163,7 @@ export function DesignPanel({ book }: { book: Book }) {
         </Field>
       </Group>
 
-      <Group title="Interior illustrations">
+      <Group title={book.kind === 'page' ? 'Illustrations' : 'Interior illustrations'}>
         <StylePicker
           compact
           label="Interior illustration style"
@@ -165,6 +176,7 @@ export function DesignPanel({ book }: { book: Book }) {
         </Button>
       </Group>
 
+      {book.kind !== 'page' && (
       <Group title="Front cover">
         <StylePicker
           compact
@@ -182,6 +194,7 @@ export function DesignPanel({ book }: { book: Book }) {
           </p>
         )}
       </Group>
+      )}
     </div>
   )
 }

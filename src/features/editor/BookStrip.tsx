@@ -66,10 +66,13 @@ function computeLayout(book: Book, counts: Record<string, number>, includeCover:
     if (numbered) number += section.pages
   }
 
-  if (includeCover) add({ key: 'cover', kind: 'cover', label: 'Cover', pages: 1 }, false)
-  add({ key: 'title', kind: 'title', label: 'Title page', pages: 1 }, false)
-  if (!hasOwnContents(book)) {
-    add({ key: 'contents', kind: 'contents', label: 'Contents', pages: counts.contents ?? 1 }, false)
+  const single = book.kind === 'page'
+  if (!single) {
+    if (includeCover) add({ key: 'cover', kind: 'cover', label: 'Cover', pages: 1 }, false)
+    add({ key: 'title', kind: 'title', label: 'Title page', pages: 1 }, false)
+    if (!hasOwnContents(book)) {
+      add({ key: 'contents', kind: 'contents', label: 'Contents', pages: counts.contents ?? 1 }, false)
+    }
   }
   book.chapters.forEach((chapter, index) => {
     add(
@@ -77,16 +80,18 @@ function computeLayout(book: Book, counts: Record<string, number>, includeCover:
         key: chapter.id,
         kind: 'chapter',
         chapterId: chapter.id,
-        label: chapter.title || `Chapter ${index + 1}`,
+        label: chapter.title || (single ? 'Page' : `Chapter ${index + 1}`),
         pages: counts[chapter.id] ?? 1,
       },
-      true,
+      // A single page carries no page number.
+      !single,
     )
   })
   return { sections, totalPages: start }
 }
 
-const SHEET = 'bg-paper shadow-xl shadow-black/40'
+// Paper and ink colours come from the page theme (see .bk-sheet in book.css).
+const SHEET = 'bk-sheet shadow-xl shadow-black/40'
 
 function Sheet({ index, metrics, children }: { index: number; metrics: PageMetrics; children: ReactNode }) {
   return (
@@ -109,6 +114,8 @@ interface FlowSectionProps {
   paragraphStyle: 'indent' | 'spaced'
   onPages: (key: string, pages: number) => void
   sectionRef?: (element: HTMLElement | null) => void
+  /** Set lists in two columns, for a page that is mostly lists (a table of contents). */
+  listColumns?: boolean
   children: ReactNode
 }
 
@@ -122,6 +129,7 @@ function FlowSection({
   paragraphStyle,
   onPages,
   sectionRef,
+  listColumns,
   children,
 }: FlowSectionProps) {
   const flowRef = useRef<HTMLDivElement>(null)
@@ -171,8 +179,9 @@ function FlowSection({
         >
           {firstNumber !== null && (
             <span
-              className="absolute inset-x-0 text-center text-print-soft"
+              className="absolute inset-x-0 text-center"
               style={{
+                color: 'var(--bk-ink-soft)',
                 bottom: metrics.mb * 0.42,
                 fontFamily: 'var(--bk-body-font)',
                 fontSize: metrics.fontPx * 0.85,
@@ -189,6 +198,7 @@ function FlowSection({
           ref={flowRef}
           className="bk-flow absolute"
           data-para={paragraphStyle}
+          data-lists={listColumns ? 'columns' : undefined}
           style={{
             left: metrics.mx,
             top: metrics.mt,
@@ -284,7 +294,7 @@ const ChapterSection = memo(function ChapterSection({
 
   const live = editable && near
   return (
-    <FlowSection sectionKey={chapter.id} sectionRef={setElement} {...flow}>
+    <FlowSection sectionKey={chapter.id} sectionRef={setElement} listColumns={isContentsTitle(chapter.title)} {...flow}>
       {number !== null && (
         <p className="bk-chapter-kicker" contentEditable={false}>
           Chapter {number}
@@ -337,19 +347,24 @@ export function BookStrip({ book, editable, pageGap, includeCover = true, onLayo
 
   const flowProps = { metrics, pageGap, paragraphStyle: page.paragraphStyle, onPages }
   const contents = sections.get('contents')
-  const numbers = useMemo(() => chapterNumbers(book.chapters.map((chapter) => chapter.title)), [book.chapters])
+  const single = book.kind === 'page'
+  const numbers = useMemo(
+    () => (single ? book.chapters.map(() => null) : chapterNumbers(book.chapters.map((chapter) => chapter.title))),
+    [book.chapters, single],
+  )
 
   return (
-    <div className="flex" style={style}>
-      {includeCover && (
+    <div className="bk-book flex" data-theme={page.theme} style={style}>
+      {!single && includeCover && (
         <Sheet index={sections.get('cover')?.start ?? 0} metrics={metrics}>
           <BookCover book={book} className="size-full" />
         </Sheet>
       )}
 
+      {!single && (
       <Sheet index={sections.get('title')?.start ?? 0} metrics={metrics}>
         <div
-          className="flex h-full flex-col items-center text-center text-print"
+          className="flex h-full flex-col items-center text-center"
           style={{
             padding: `${metrics.mt}px ${metrics.mx}px ${metrics.mb}px`,
             fontFamily: 'var(--bk-body-font)',
@@ -358,13 +373,14 @@ export function BookStrip({ book, editable, pageGap, includeCover = true, onLayo
         >
           <div
             className="mt-[24%] font-semibold text-balance"
-            style={{ fontFamily: 'var(--bk-heading-font)', fontSize: '2.6em', lineHeight: 1.1 }}
+            style={{ fontFamily: 'var(--bk-heading-font)', fontSize: '2.6em', lineHeight: 1.1, color: 'var(--bk-heading)' }}
           >
             {book.title}
           </div>
           {book.author && <div className="mt-auto mb-[6%] tracking-[0.2em] uppercase">{book.author}</div>}
         </div>
       </Sheet>
+      )}
 
       {contents && (
         <FlowSection sectionKey="contents" start={contents.start} firstNumber={null} {...flowProps}>
