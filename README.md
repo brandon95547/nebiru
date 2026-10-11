@@ -153,7 +153,7 @@ provider's reason. They are never replaced by stand-in output.
 | Planning, conversational outline edits | Working with DeepSeek |
 | Chapter writing, per-chapter regeneration, adaptation of imported material | Working with DeepSeek |
 | Grammar, rewrite, expand, shorten, restyle; assistant chat that can rewrite the open chapter | Working with DeepSeek |
-| Illustrations and covers with FLUX.1 Dev | Built and tested up to the model itself: the stack starts, ComfyUI accepts the FLUX workflow, the downloader works. Not yet run on a GPU with the real model files |
+| Illustrations and covers with FLUX.1 Dev | Working. Run on an RTX A4000 (16 GB, shared with other services) with `Q4_K_S`: about 85 seconds for a 896 × 1152 picture when the model is loaded fresh each time |
 | Visual editor: pages, text flow, illustrations, thumbnails, preview | Working |
 | Export to PDF and EPUB | Not built yet |
 
