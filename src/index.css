@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "./styles/book.css";
+
+/* Semantic tokens. Every color is an alias of a Tailwind palette step, so the
+   whole theme can be re-tinted here without touching components. */
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display Variable", ui-serif, Georgia, serif;
+
+  --color-canvas: var(--color-stone-950);
+  --color-panel: var(--color-stone-900);
+  --color-raised: var(--color-stone-800);
+  --color-line: var(--color-stone-800);
+  --color-line-strong: var(--color-stone-700);
+
+  --color-ink: var(--color-stone-100);
+  --color-ink-soft: var(--color-stone-300);
+  --color-ink-mute: var(--color-stone-400);
+
+  --color-accent: var(--color-amber-400);
+  --color-accent-soft: var(--color-amber-300);
+  --color-accent-ink: var(--color-stone-950);
+
+  --color-paper: var(--color-stone-50);
+  --color-print: var(--color-stone-900);
+  --color-print-soft: var(--color-stone-600);
+
+  --color-danger: var(--color-red-400);
+  --color-success: var(--color-emerald-400);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-stone-950);
+    color: var(--color-stone-100);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-amber-400) 35%, transparent);
+  }
+}
+
+/* Thin, quiet scrollbars for the dark workspace. */
+@utility scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-stone-700) transparent;
+}

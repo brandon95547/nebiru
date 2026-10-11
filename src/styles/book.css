@@ -1,0 +1,303 @@
+/* Typography and layout of the printed page. These rules style generated
+   book content (editor DOM and static HTML alike), so they are plain CSS
+   driven by the --bk-* variables that BookStrip sets from the page settings. */
+
+.bk-flow {
+  column-fill: auto;
+  color: var(--color-stone-900);
+  font-family: var(--bk-body-font);
+  font-size: var(--bk-font-size);
+  line-height: var(--bk-line-height);
+  font-kerning: normal;
+  hyphens: auto;
+  orphans: 2;
+  widows: 2;
+  overflow-wrap: break-word;
+}
+
+/* The editor needs preserved white space to behave; static renders repeat the
+   rule so both lay out text identically. pre-wrap rather than the editor's
+   default break-spaces, which would carry a space onto the start of a line. */
+.bk-flow .ProseMirror {
+  position: relative;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-variant-ligatures: none;
+}
+
+.bk-flow p {
+  margin: 0;
+  text-align: var(--bk-align);
+}
+
+/* An empty paragraph holds a line in the editor; keep it a line tall everywhere. */
+.bk-flow p:empty::before {
+  content: "\200b";
+}
+
+/* Text runs on past a floated illustration, so the paragraph after one is
+   spaced like any other. The second selector of each pair matches the editor,
+   where the figure sits inside a node wrapper. */
+.bk-flow[data-para="indent"] p + p,
+.bk-flow[data-para="indent"] .bk-ill:is([data-placement="left"], [data-placement="right"]) + p,
+.bk-flow[data-para="indent"] .node-illustration:has(> .bk-ill:is([data-placement="left"], [data-placement="right"])) + p {
+  text-indent: 1.5em;
+}
+
+.bk-flow[data-para="spaced"] p + p,
+.bk-flow[data-para="spaced"] .bk-ill:is([data-placement="left"], [data-placement="right"]) + p,
+.bk-flow[data-para="spaced"] .node-illustration:has(> .bk-ill:is([data-placement="left"], [data-placement="right"])) + p {
+  margin-top: 0.75em;
+}
+
+.bk-flow h2,
+.bk-flow h3 {
+  font-family: var(--bk-heading-font);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  hyphens: manual;
+  break-after: avoid;
+}
+
+.bk-flow h2 {
+  font-size: 1.35em;
+  margin: 1.5em 0 0.6em;
+}
+
+.bk-flow h3 {
+  font-size: 1.12em;
+  margin: 1.3em 0 0.5em;
+}
+
+.bk-flow blockquote {
+  margin: 1em 1.5em;
+  font-style: italic;
+}
+
+.bk-flow ul,
+.bk-flow ol {
+  margin: 0.75em 0;
+  padding-left: 1.5em;
+}
+
+.bk-flow ul {
+  list-style: disc;
+}
+
+.bk-flow ol {
+  list-style: decimal;
+}
+
+.bk-flow hr {
+  border: 0;
+  margin: 1.2em 0;
+  text-align: center;
+  break-inside: avoid;
+}
+
+.bk-flow hr::after {
+  content: "\2042";
+  font-size: 1.1em;
+  letter-spacing: 0.4em;
+}
+
+/* Chapter opener */
+
+.bk-chapter-kicker {
+  margin: 0;
+  padding-top: 16%;
+  font-family: var(--bk-heading-font);
+  font-size: 0.72em;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--color-stone-600);
+}
+
+.bk-chapter-title {
+  margin: 0.5em 0 1.8em;
+  font-family: var(--bk-heading-font);
+  font-size: 2em;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  hyphens: manual;
+  break-after: avoid;
+  outline: none;
+}
+
+/* Without a "Chapter N" line above it, the title carries the opening drop itself. */
+.bk-chapter-title:first-child {
+  padding-top: 16%;
+}
+
+.bk-chapter-title:empty::before {
+  content: "Chapter title";
+  color: var(--color-stone-500);
+}
+
+/* Contents page */
+
+.bk-toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  margin-bottom: 0.55em;
+  text-align: left;
+  hyphens: manual;
+  break-inside: avoid;
+}
+
+.bk-toc-dots {
+  flex: 1;
+  min-width: 1.5em;
+  border-bottom: 1px dotted var(--color-stone-500);
+  transform: translateY(-0.25em);
+}
+
+/* Illustrations */
+
+.bk-ill {
+  position: relative;
+  margin: 0;
+  white-space: normal;
+  break-inside: avoid;
+}
+
+.bk-ill[data-placement="left"] {
+  float: left;
+  margin: 0.3em 1.1em 0.5em 0;
+}
+
+.bk-ill[data-placement="right"] {
+  float: right;
+  margin: 0.3em 0 0.5em 1.1em;
+}
+
+.bk-ill[data-placement="center"] {
+  clear: both;
+  margin: 1em auto;
+}
+
+.bk-ill[data-placement="wide"] {
+  clear: both;
+  width: 100% !important;
+  margin: 1em 0;
+}
+
+/* A full-bleed plate: the figure takes one whole column and its frame
+   reaches out over the page margins. Columns do not clip, so it paints
+   edge to edge on the sheet behind it. */
+.bk-ill[data-placement="page"] {
+  clear: both;
+  width: 100% !important;
+  height: calc(var(--bk-col-h) - 1px);
+  margin: 0;
+  break-before: column;
+  break-after: column;
+}
+
+.bk-ill-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--color-stone-200);
+}
+
+/* The frame is laid out at the column's own corner and then shifted with a
+   transform. Positioning it with negative offsets instead would start it above
+   the column, and the browser would place it in the previous column. */
+.bk-ill[data-placement="page"] .bk-ill-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% + 2 * var(--bk-mx));
+  height: calc(var(--bk-col-h) + var(--bk-mt) + var(--bk-mb));
+  transform: translate(calc(-1 * var(--bk-mx)), calc(-1 * var(--bk-mt)));
+  aspect-ratio: auto !important;
+}
+
+.bk-ill-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.bk-ill-empty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 1em;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  text-indent: 0;
+  color: var(--color-stone-600);
+}
+
+.bk-ill figcaption {
+  margin-top: 0.4em;
+  font-size: 0.8em;
+  font-style: italic;
+  line-height: 1.35;
+  text-align: center;
+  text-indent: 0;
+  color: var(--color-stone-600);
+}
+
+.bk-ill[data-placement="page"] figcaption {
+  display: none;
+}
+
+/* Editing affordances (never present in static renders). */
+
+.bk-ill.is-editable {
+  cursor: grab;
+}
+
+.bk-ill.is-selected .bk-ill-frame {
+  outline: 2px solid var(--color-amber-400);
+  outline-offset: 2px;
+}
+
+.bk-ill-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background-color: color-mix(in oklab, var(--color-stone-950) 55%, transparent);
+  color: var(--color-stone-50);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.bk-ill-handle {
+  position: absolute;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-stone-50);
+  border-radius: 9999px;
+  background-color: var(--color-amber-400);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.bk-ill-handle[data-side="right"] {
+  right: -7px;
+}
+
+.bk-ill-handle[data-side="left"] {
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.ProseMirror-dropcursor {
+  background-color: var(--color-amber-400) !important;
+}

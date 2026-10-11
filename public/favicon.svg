@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Tailwind stone-900 / amber-400 -->
+  <rect width="32" height="32" rx="7" fill="oklch(21.6% 0.006 56.043)" />
+  <path d="M16 10c-2.2-1.5-4.8-2-7.5-2v13c2.700 0 5.300.5 7.500 2 2.200-1.500 4.800-2 7.500-2V8c-2.700 0-5.300.5-7.500 2Zm0 0v13" fill="none" stroke="oklch(82.8% 0.189 84.429)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" />
+</svg>
