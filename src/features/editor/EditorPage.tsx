@@ -10,6 +10,7 @@ import {
   ImagePlus,
   Italic,
   type LucideIcon,
+  Maximize,
   MessageSquare,
   Minus,
   Palette,
@@ -21,7 +22,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router'
 import { SaveStatus, ServiceStatus } from '@/components/AppHeader'
 import { Button, IconButton } from '@/components/ui/Button'
 import { Field, Textarea } from '@/components/ui/Field'
@@ -41,6 +42,7 @@ import { AssistantPanel } from './panels/AssistantPanel'
 import { DesignPanel } from './panels/DesignPanel'
 import { IllustrationPanel } from './panels/IllustrationPanel'
 import { PreviewOverlay } from './PreviewOverlay'
+import type { PreviewMode } from './previewViews'
 
 const PAGE_GAP = 28
 const CANVAS_PAD = 36
@@ -145,7 +147,7 @@ function RegenerateDialog({ book, chapter, onClose }: { book: Book; chapter: Cha
   )
 }
 
-function Workspace({ book }: { book: Book }) {
+function Workspace({ book, openPreview }: { book: Book; openPreview: boolean }) {
   const metrics = useMemo(() => pageMetrics(book.page), [book.page])
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
@@ -153,7 +155,11 @@ function Workspace({ book }: { book: Book }) {
   const [zoomMode, setZoomMode] = useState<'fit' | number>('fit')
   const [currentPage, setCurrentPage] = useState(0)
   const [tab, setTab] = useState<PanelTab>('assistant')
-  const [preview, setPreview] = useState(false)
+  // A single page previews on its own; a book opens as facing pages unless one page was asked for.
+  const naturalMode: PreviewMode = book.kind === 'page' ? 'page' : 'spread'
+  const [preview, setPreview] = useState<{ page: number; mode: PreviewMode } | null>(
+    openPreview ? { page: 0, mode: naturalMode } : null,
+  )
   const [regenerating, setRegenerating] = useState<Chapter | null>(null)
   const [deleting, setDeleting] = useState<Chapter | null>(null)
 
@@ -233,6 +239,9 @@ function Workspace({ book }: { book: Book }) {
           <IconButton label="Next page" disabled={currentPage >= total - 1} onClick={() => goToPage(currentPage + 1)}>
             <ChevronRight className="size-4" />
           </IconButton>
+          <IconButton label="Preview this page full screen" onClick={() => setPreview({ page: currentPage, mode: 'page' })}>
+            <Maximize className="size-4" />
+          </IconButton>
           <Divider />
           <IconButton label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom(zoom - ZOOM_STEP)}>
             <Minus className="size-4" />
@@ -254,7 +263,7 @@ function Workspace({ book }: { book: Book }) {
           <Divider />
           <SaveStatus />
           <ServiceStatus />
-          <Button variant="secondary" size="sm" onClick={() => setPreview(true)}>
+          <Button variant="secondary" size="sm" onClick={() => setPreview({ page: currentPage, mode: naturalMode })}>
             <Eye className="size-4" /> Preview
           </Button>
           <Menu
@@ -332,7 +341,9 @@ function Workspace({ book }: { book: Book }) {
         </aside>
       </div>
 
-      {preview && <PreviewOverlay book={book} onClose={() => setPreview(false)} />}
+      {preview && (
+        <PreviewOverlay book={book} startPage={preview.page} startMode={preview.mode} onClose={() => setPreview(null)} />
+      )}
       {regenerating && <RegenerateDialog book={book} chapter={regenerating} onClose={() => setRegenerating(null)} />}
       {deleting && (
         <Modal
@@ -364,10 +375,12 @@ function Workspace({ book }: { book: Book }) {
 
 export function EditorPage() {
   const { bookId = '' } = useParams()
+  const [params] = useSearchParams()
   const book = useLibrary((state) => state.books[bookId])
 
   if (!book) return <Navigate to="/" replace />
   // Nothing written yet: the outline comes first.
   if (!book.chapters.some((chapter) => chapter.content)) return <Navigate to={`/book/${book.id}/plan`} replace />
-  return <Workspace key={book.id} book={book} />
+  // ?preview opens straight into the full-screen preview (the library's Preview action).
+  return <Workspace key={book.id} book={book} openPreview={params.has('preview')} />
 }

@@ -2,7 +2,8 @@
 
 An AI-powered studio for creating illustrated books: plan a book from an idea or
 from imported material, have it written and illustrated, then edit every page in
-a visual, print-accurate editor.
+a visual, print-accurate editor. It also makes single pages (a contents page, a
+poem, a recipe) from a file or a photo of one.
 
 Nebiru runs as one Docker Compose application:
 
@@ -152,11 +153,17 @@ provider's reason. They are never replaced by stand-in output.
 | Import: photos and scans of pages (JPEG, PNG, HEIC, WebP, TIFF) | Working. The writing model reads each page and keeps its title, section headings, numbered lists and verse lines |
 | An instruction with an import ("a new illustrated table of contents in a gothic design") | Working. It guides the plan and what the illustrations show |
 | Import: MOBI/AZW, audio, video | Recognised, but conversion and transcription are not built |
+| A single page from an import | Working. Made straight away, with no cover, title page or page numbers |
+| A book from an import, keeping the original wording | Working |
+| A book from an import, rewritten in new words | Working with DeepSeek. Each chapter says what its source section says, in the same order, with every sentence written fresh |
+| Table of contents approved before anything is written | Working. Every title and summary can be edited by hand, chapters added, removed and reordered |
 | Planning, conversational outline edits | Working with DeepSeek |
-| Chapter writing, per-chapter regeneration, adaptation of imported material | Working with DeepSeek |
+| Chapter writing, per-chapter regeneration | Working with DeepSeek |
+| Light or dark pages | Working. Light gives every page a light background, for printing; dark is black pages with gilt headings, for the screen |
 | Grammar, rewrite, expand, shorten, restyle; assistant chat that can rewrite the open chapter | Working with DeepSeek |
 | Illustrations and covers with FLUX.1 Dev | Working. Run on an RTX A4000 (16 GB, shared with other services) with `Q4_K_S`: about 85 seconds for a 896 × 1152 picture when the model is loaded fresh each time |
-| Visual editor: pages, text flow, illustrations, thumbnails, preview | Working |
+| Visual editor: pages, text flow, illustrations, thumbnails | Working |
+| Full-screen preview of any page, one page or facing pages | Working. From the editor's toolbar or a library card's menu |
 | Export to PDF and EPUB | Not built yet |
 
 ## Development
@@ -250,5 +257,17 @@ ends, while the chapter stays one editable Tiptap document. Chapters near the
 viewport get a live editor; the rest, the thumbnails and the preview render the
 same document as static HTML with identical layout.
 
+A list-heavy page such as a table of contents sets its lists in two columns.
+
+### How a book is rewritten in new words
+
+A chapter's source is cut into passages of about 900 words, on paragraph
+boundaries and never straight after a heading, and each passage is reworded by
+itself (`server/app/text_service.py`). Short passages keep the model from
+summarising, so the rewritten book stays as long and as complete as the
+original, and a long chapter never outgrows one reply. Headings, numbered
+entries and verse lines keep their markers through the rewrite.
+
 Colours are all Tailwind palette steps, aliased to semantic tokens in
-`src/index.css`.
+`src/index.css`. The page itself has two palettes, light and dark, defined once
+in `src/styles/book.css`.

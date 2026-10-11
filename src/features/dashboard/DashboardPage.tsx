@@ -1,4 +1,4 @@
-import { BookOpen, Download, Ellipsis, FileUp, FolderOpen, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { BookOpen, Download, Ellipsis, Eye, FileUp, FolderOpen, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AppHeader } from '@/components/AppHeader'
@@ -25,6 +25,8 @@ function downloadProject(book: Book): void {
 }
 
 function BookCard({ book, onDelete }: { book: Book; onDelete: () => void }) {
+  const navigate = useNavigate()
+  const made = book.chapters.some((chapter) => chapter.content)
   const words = useMemo(
     () => book.chapters.reduce((sum, chapter) => sum + docWordCount(chapter.content), 0),
     [book.chapters],
@@ -42,7 +44,9 @@ function BookCard({ book, onDelete }: { book: Book; onDelete: () => void }) {
         <Link to={bookHref(book)} className="min-w-0 flex-1 rounded">
           <h2 className="line-clamp-2 font-medium text-ink">{book.title || 'Untitled'}</h2>
           <p className="mt-1 text-sm text-ink-mute">
-            {STATUS_LABEL[book.status]} · {plural(book.chapters.length, 'chapter')}
+            {book.kind === 'page'
+              ? 'Single page'
+              : `${STATUS_LABEL[book.status]} · ${plural(book.chapters.length, 'chapter')}`}
             {words > 0 && ` · ${plural(words, 'word')}`}
           </p>
           <p className="text-sm text-ink-mute">Edited {timeAgo(book.updatedAt)}</p>
@@ -51,6 +55,12 @@ function BookCard({ book, onDelete }: { book: Book; onDelete: () => void }) {
           label={`Actions for ${book.title || 'Untitled'}`}
           trigger={<Ellipsis className="size-4" />}
           items={[
+            {
+              label: 'Preview full screen',
+              icon: <Eye className="size-4" />,
+              disabled: !made,
+              onSelect: () => navigate(`/book/${book.id}?preview`),
+            },
             { label: 'Download project file', icon: <Download className="size-4" />, onSelect: () => downloadProject(book) },
             { label: 'Delete book', icon: <Trash2 className="size-4" />, danger: true, onSelect: onDelete },
           ]}
@@ -66,8 +76,8 @@ function EmptyLibrary() {
       <BookOpen aria-hidden className="mx-auto size-10 text-accent" />
       <h1 className="mt-6 font-display text-4xl text-ink">Make your first book</h1>
       <p className="mt-4 text-lg text-ink-soft">
-        Start from an idea, or bring in a manuscript, an ebook or a recording. Nebiru plans the chapters,
-        writes and illustrates them, and lays out every page for you to edit.
+        Start from an idea, or bring in a manuscript, an ebook or photos of pages. Nebiru makes a whole
+        illustrated book or a single page from it, and lays out every page for you to edit.
       </p>
       <div className="mt-10 grid gap-4 text-left sm:grid-cols-2">
         <Link
