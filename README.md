@@ -68,6 +68,34 @@ Containers and images can be removed and rebuilt at any time without touching
 it. To back up, or to move Nebiru to another machine, copy `data/` and `.env`.
 Files in it belong to the user who ran `./nebiru setup`, not to root.
 
+## Removing Nebiru
+
+Deleting the folder does not give all the disk space back. The folder holds
+`data/` (the model files, books and images), but the Docker images and build
+cache live in Docker's own storage. From inside the Nebiru folder, in this
+order:
+
+```bash
+# Stop, and remove the containers, the network and both images.
+docker compose --profile art down --rmi all
+
+# Clear the build cache.
+docker builder prune -f
+```
+
+Then delete the folder.
+
+- **Stop before deleting.** If the folder is deleted while the containers are
+  running, its space is not freed until they stop, and they restart on their own.
+- **`./nebiru stop` is not enough.** It removes the containers and leaves the
+  images.
+- **The cache prune covers the whole machine.** It clears unused build cache
+  for every Docker project there, not only Nebiru. Nothing breaks; their next
+  build is slower.
+- **Keeping your books.** Copy `data/nebiru` somewhere first. It holds the
+  books and their images and is small; the bulk of `data/` is the model files,
+  which can be downloaded again.
+
 ## Settings
 
 All in `.env`; `.env.example` documents each one. The ones you are most likely
@@ -95,6 +123,9 @@ Other things worth knowing:
   the CPU anyway (many minutes per picture; for testing only), set
   `COMPOSE_PROFILES=art` and
   `COMPOSE_FILE=docker-compose.yml:docker-compose.cpu.yml`.
+- **A GPU that is already in use.** `./nebiru setup` picks the quantization
+  from the card's total memory, not from what is free. If other services
+  already hold part of it, set `FLUX_QUANT` to a smaller size by hand.
 - **Your own model files.** Set `NEBIRU_SKIP_MODEL_DOWNLOAD=1` and put them
   under `data/models/` in `diffusion_models/`, `text_encoders/` and `vae/`.
 - **Your own workflow.** Export one from ComfyUI in API format, save it under
