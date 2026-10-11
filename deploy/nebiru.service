@@ -1,0 +1,42 @@
+# /etc/systemd/system/nebiru.service — Nebiru (Docker, 127.0.0.1:8787)
+#
+# Install:  cp deploy/nebiru.service /etc/systemd/system/ && systemctl daemon-reload
+#           systemctl enable --now nebiru
+# Deploy:   cd /var/www/nebiru && git pull --ff-only && systemctl restart nebiru
+#
+# Runs `docker compose up` in the foreground rather than detached, so systemd owns the
+# stack and its output lands in the journal (`journalctl -u nebiru -f`). Same shape as
+# shotmatrix.service and altar.service.
+#
+# Unlike those two there is no --abort-on-container-exit. The ComfyUI container exits on
+# purpose when a model download fails, so that its own restart policy resumes the
+# download; aborting the stack on that would take the app down with it. Each container
+# restarts itself (`restart: unless-stopped` in docker-compose.yml), and systemd restarts
+# the stack if compose itself goes away.
+#
+# Which containers run is decided by /var/www/nebiru/.env: COMPOSE_PROFILES=art adds
+# ComfyUI (needs the NVIDIA Container Toolkit); empty runs the app alone.
+[Unit]
+Description=Nebiru illustrated-book studio (Docker, 127.0.0.1:8787)
+Documentation=https://github.com/brandon95547/nebiru
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/nebiru
+# Rebuilt on every start. Unchanged layers are cached, so a restart is seconds; the long
+# timeout is for a first build of the ComfyUI image, which installs PyTorch with CUDA.
+ExecStartPre=/usr/bin/docker compose build
+ExecStart=/usr/bin/docker compose up --no-log-prefix
+# --profile art so ComfyUI is stopped too, even if it has since been switched off in .env.
+ExecStop=/usr/bin/docker compose --profile art down
+Restart=always
+RestartSec=10
+TimeoutStartSec=1800
+TimeoutStopSec=60
+SyslogIdentifier=nebiru
+
+[Install]
+WantedBy=multi-user.target
