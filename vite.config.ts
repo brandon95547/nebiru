@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { tsconfigPaths: true },
-  server: { port: 5199, strictPort: true },
+  // The Nebiru server (server/) answers everything under /api.
+  server: { port: 5199, strictPort: true, proxy: { '/api': 'http://127.0.0.1:8787' } },
   test: { environment: 'jsdom', include: ['src/**/*.test.ts'] },
 })

@@ -6,7 +6,7 @@ import { Field, Input, Segmented, Select } from '@/components/ui/Field'
 import { Spinner } from '@/components/ui/Overlay'
 import { BODY_FONTS, HEADING_FONTS, TRIM_SIZES } from '@/lib/bookFormats'
 import { clamp } from '@/lib/util'
-import { generateCover, restyleInterior } from '@/services/generation'
+import { generateCover, restyleInterior, useJobs } from '@/services/generation'
 import { patchBook, updateBook } from '@/store/library'
 import type { Book, PageMargins, PageSettings } from '@/types'
 
@@ -57,6 +57,7 @@ function NumberField({ label, value, min, max, step, onChange }: NumberFieldProp
 export function DesignPanel({ book }: { book: Book }) {
   const { page } = book
   const [redrawing, setRedrawing] = useState<'interior' | 'cover' | null>(null)
+  const coverFailure = useJobs((state) => state.pictureErrors[book.id])
 
   const setPage = (patch: Partial<PageSettings>) =>
     updateBook(book.id, (current) => ({ ...current, page: { ...current.page, ...patch } }))
@@ -175,6 +176,11 @@ export function DesignPanel({ book }: { book: Book }) {
           {redrawing === 'cover' ? <Spinner /> : <RefreshCw className="size-4" />}
           Redraw the cover
         </Button>
+        {book.cover.status === 'error' && (
+          <p role="alert" className="text-sm text-red-300">
+            {coverFailure ?? 'The cover could not be drawn.'}
+          </p>
+        )}
       </Group>
     </div>
   )

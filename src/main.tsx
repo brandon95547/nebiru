@@ -16,9 +16,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import App from './App'
+import { startServices } from './services'
 import { flushSaves, initLibrary } from './store/library'
 
 void initLibrary()
+startServices()
 
 // Books save on a short delay; make sure nothing is lost when the tab goes away.
 window.addEventListener('pagehide', flushSaves)

@@ -46,8 +46,11 @@ function ChapterState({ chapter }: { chapter: Chapter }) {
   }
   if (chapter.status === 'ready') {
     return (
-      <span className="flex items-center gap-1.5 text-sm text-success">
-        <Check aria-hidden className="size-3.5" /> Written
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="flex items-center gap-1.5 text-success">
+          <Check aria-hidden className="size-3.5" /> Written
+        </span>
+        {chapter.error && <span className="text-accent-soft">{chapter.error}</span>}
       </span>
     )
   }

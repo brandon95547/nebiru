@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { Field, Input, Segmented, Textarea } from '@/components/ui/Field'
 import { Spinner } from '@/components/ui/Overlay'
 import { illustrationStyle } from '@/lib/illustrationStyles'
-import { generateIllustration } from '@/services/generation'
+import { generateIllustration, useJobs } from '@/services/generation'
 import { findIllustration, patchLiveIllustration, useEditorHub } from '@/store/editorHub'
 import type { Book, IllustrationAttrs, IllustrationPlacement } from '@/types'
 import { insertIllustrationAtCursor } from '../actions'
@@ -44,6 +44,7 @@ export function IllustrationPanel({ book }: { book: Book }) {
   const selected = useEditorHub((state) => state.selectedIllustration)
   const editor = useEditorHub((state) => (selected ? state.editors[selected.chapterId] : undefined))
   const hasCursor = useEditorHub((state) => state.activeChapterId !== null)
+  const failure = useJobs((state) => (selected ? state.pictureErrors[selected.id] : undefined))
   // Re-read the node whenever its editor changes.
   useEditorHub((state) => state.tick)
 
@@ -84,6 +85,11 @@ export function IllustrationPanel({ book }: { book: Book }) {
         {busy ? <Spinner /> : <RefreshCw className="size-4" />}
         {busy ? 'Drawing…' : attrs.src ? 'Regenerate' : 'Generate'}
       </Button>
+      {attrs.status === 'error' && (
+        <p role="alert" className="text-sm text-red-300">
+          {failure ?? 'The illustration could not be drawn.'}
+        </p>
+      )}
 
       <Field label="Position">
         <Segmented label="Position on the page" value={attrs.placement} options={PLACEMENTS} onChange={(placement) => patch({ placement })} />

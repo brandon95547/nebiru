@@ -1,5 +1,5 @@
 import { NodeSelection } from '@tiptap/pm/state'
-import { EMPTY_DOC, illustrationNode, newIllustration } from '@/lib/doc'
+import { buildChapterDoc, EMPTY_DOC, illustrationNode, listIllustrations, newIllustration } from '@/lib/doc'
 import { services } from '@/services'
 import { briefOf } from '@/services/generation'
 import type { RevisionAction } from '@/services/text/types'
@@ -107,4 +107,16 @@ export function insertIllustrationAtStart(bookId: string, chapter: Chapter): voi
   }
   const doc = chapter.content ?? EMPTY_DOC
   setChapterContent(bookId, chapter.id, { ...doc, content: [json, ...(doc.content ?? [])] }, true)
+}
+
+/**
+ * Replace a chapter's text with a version the assistant rewrote. The
+ * chapter's illustrations are kept and spread through the new text.
+ */
+export function applyChapterRevision(bookId: string, chapter: Chapter, paragraphs: string[]): void {
+  const editor = liveEditor(chapter.id)
+  const current = editor ? editor.getJSON() : chapter.content
+  const doc = buildChapterDoc(paragraphs, listIllustrations(current), { keepPlacement: true })
+  if (editor) editor.commands.setContent(doc, { emitUpdate: true })
+  else setChapterContent(bookId, chapter.id, doc, true)
 }

@@ -39,6 +39,8 @@ export interface ChapterDraft {
   paragraphs: string[]
   /** One prompt per illustration the chapter should carry. */
   illustrationPrompts: string[]
+  /** Something the author should know about a chapter that was still produced. */
+  note?: string
 }
 
 export interface TextService {
@@ -67,11 +69,14 @@ export interface TextService {
     style?: string
   }): Promise<{ text: string; note?: string }>
 
-  /** Converse about the book. */
+  /**
+   * Converse about the book. When the author asks for a change to the open
+   * chapter, `revisedChapter` holds its complete new text for them to accept.
+   */
   chat(input: {
     brief: BookBrief
     messages: ChatMessage[]
     chapterTitle?: string
     chapterText?: string
-  }): Promise<{ reply: string }>
+  }): Promise<{ reply: string; revisedChapter?: string[] }>
 }

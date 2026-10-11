@@ -4,6 +4,7 @@ import { Spinner } from './components/ui/Overlay'
 import { NewBookPage } from './features/create/NewBookPage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { PlanPage } from './features/plan/PlanPage'
+import { useServiceStatus } from './services'
 import { useLibrary } from './store/library'
 
 // The editor carries the rich-text engine, so it loads only when a book is opened.
@@ -18,8 +19,9 @@ function Loading() {
 }
 
 export default function App() {
-  const ready = useLibrary((state) => state.ready)
-  if (!ready) return <Loading />
+  const loaded = useLibrary((state) => state.ready)
+  const settled = useServiceStatus((state) => state.settled)
+  if (!loaded || !settled) return <Loading />
 
   return (
     <Suspense fallback={<Loading />}>

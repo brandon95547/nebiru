@@ -31,16 +31,21 @@ export function illustrationNode(attrs: IllustrationAttrs): JSONContent {
 
 /**
  * Build a chapter document from plain paragraphs, spreading the given
- * illustrations through the text. The first sits beside the opening
- * paragraphs; later ones alternate sides.
+ * illustrations through the text. New illustrations alternate sides, the
+ * first beside the opening paragraphs; with `keepPlacement` each one keeps
+ * the position the author already gave it.
  */
-export function buildChapterDoc(paragraphs: string[], illustrations: IllustrationAttrs[]): JSONContent {
+export function buildChapterDoc(
+  paragraphs: string[],
+  illustrations: IllustrationAttrs[],
+  options: { keepPlacement?: boolean } = {},
+): JSONContent {
   const nodes: JSONContent[] = paragraphs.map(paragraphNode)
   const count = illustrations.length
   // Insert back to front so earlier insert positions stay valid.
   for (let i = count - 1; i >= 0; i--) {
     const at = Math.min(nodes.length, Math.max(1, Math.round(((i + 0.12) * paragraphs.length) / count)))
-    const placement = i % 2 === 0 ? 'right' : 'left'
+    const placement = options.keepPlacement ? illustrations[i].placement : i % 2 === 0 ? 'right' : 'left'
     nodes.splice(at, 0, illustrationNode({ ...illustrations[i], placement }))
   }
   if (nodes.length === 0) nodes.push({ type: 'paragraph' })

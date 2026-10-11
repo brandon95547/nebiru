@@ -6,3 +6,9 @@ dist
 .env.*
 !.env.example
 .claude/
+
+# Backend
+server/.venv/
+server/data/
+__pycache__/
+.pytest_cache/

@@ -14,9 +14,20 @@ import type { BookBrief } from './text/types'
 interface JobsState {
   /** Books with a full generation run in progress. */
   books: Record<string, boolean>
+  /** Why the last attempt at a picture failed, keyed by illustration id (or book id for a cover). */
+  pictureErrors: Record<string, string>
 }
 
-export const useJobs = create<JobsState>()(() => ({ books: {} }))
+export const useJobs = create<JobsState>()(() => ({ books: {}, pictureErrors: {} }))
+
+function setPictureError(key: string, message: string | null): void {
+  useJobs.setState((state) => {
+    const pictureErrors = { ...state.pictureErrors }
+    if (message) pictureErrors[key] = message
+    else delete pictureErrors[key]
+    return { pictureErrors }
+  })
+}
 
 function setRunning(bookId: string, running: boolean): void {
   useJobs.setState((state) => ({ books: { ...state.books, [bookId]: running } }))
@@ -69,6 +80,7 @@ export async function generateIllustration(bookId: string, chapterId: string, id
   if (!book || !attrs) return
 
   writeIllustration(bookId, chapterId, id, { status: 'generating' })
+  setPictureError(id, null)
   try {
     const result = await services.illustration.generate({
       prompt: attrs.prompt,
@@ -77,7 +89,8 @@ export async function generateIllustration(bookId: string, chapterId: string, id
       purpose: 'interior',
     })
     writeIllustration(bookId, chapterId, id, { src: result.src, seed: result.seed, status: 'ready' })
-  } catch {
+  } catch (error) {
+    setPictureError(id, errorMessage(error))
     writeIllustration(bookId, chapterId, id, { status: 'error' })
   }
 }
@@ -87,6 +100,7 @@ export async function generateCover(bookId: string): Promise<void> {
   if (!book) return
   const prompt = book.cover.prompt || `Front cover for “${book.title}”. ${book.description}`.slice(0, 400)
   patchBook(bookId, { cover: { ...book.cover, prompt, status: 'generating' } })
+  setPictureError(bookId, null)
   try {
     const result = await services.illustration.generate({
       prompt,
@@ -95,7 +109,8 @@ export async function generateCover(bookId: string): Promise<void> {
       purpose: 'cover',
     })
     patchBook(bookId, { cover: { prompt, src: result.src, seed: result.seed, status: 'ready' } })
-  } catch {
+  } catch (error) {
+    setPictureError(bookId, errorMessage(error))
     updateBook(bookId, (current) => ({ ...current, cover: { ...current.cover, status: 'error' } }))
   }
 }
@@ -120,7 +135,7 @@ export async function writeChapter(bookId: string, chapterId: string, instructio
     updateBook(bookId, (current) => ({
       ...current,
       chapters: current.chapters.map((c) =>
-        c.id === chapterId ? { ...c, content, rev: c.rev + 1, status: 'ready' } : c,
+        c.id === chapterId ? { ...c, content, rev: c.rev + 1, status: 'ready', error: draft.note } : c,
       ),
     }))
     for (const illustration of illustrations) {

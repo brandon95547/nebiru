@@ -61,6 +61,7 @@ export interface Chapter {
   rev: number
   /** Sections of imported material this chapter draws on. */
   sourceSectionIds: string[]
+  /** Why writing failed (status 'error'), or a caveat on a chapter that was written. */
   error?: string
 }
 
@@ -96,6 +97,8 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
+  /** A rewritten chapter the assistant is offering in this message. */
+  revision?: { chapterId: string; paragraphs: string[]; applied: boolean }
 }
 
 export type BookStatus = 'planning' | 'generating' | 'ready'

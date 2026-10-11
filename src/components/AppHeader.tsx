@@ -1,18 +1,45 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { services } from '@/services'
+import { cx } from '@/lib/util'
+import { connectServices, useServiceStatus } from '@/services'
 
-/** Tells the user whether real models are behind the AI features. */
+/**
+ * Says which AI features are running on stand-ins instead of real models, or
+ * that a live one has a problem. Shows nothing when everything is in order.
+ * Clicking it checks again.
+ */
 export function ServiceStatus() {
-  if (services.mode === 'live') return null
+  const text = useServiceStatus((state) => state.text)
+  const illustration = useServiceStatus((state) => state.illustration)
+
+  const label =
+    !text.live && !illustration.live
+      ? 'Placeholder AI'
+      : !text.live
+        ? 'Placeholder writing'
+        : !illustration.live
+          ? 'Placeholder art'
+          : text.detail || illustration.detail
+            ? 'AI needs attention'
+            : null
+  if (!label) return null
+
+  const explain = (name: string, stateOf: typeof text) =>
+    stateOf.live
+      ? `${name}: connected${stateOf.detail ? `, but ${stateOf.detail}` : '.'}`
+      : `${name}: using a built-in stand-in. ${stateOf.detail}`
+  const title = [explain('Writing (DeepSeek)', text), explain('Illustration (ComfyUI)', illustration), 'Click to check again.'].join('\n')
+
   return (
-    <span
-      title="DeepSeek and ComfyUI are not connected yet. Writing and illustrations use built-in stand-ins."
-      className="inline-flex h-7 items-center gap-2 rounded-full border border-line-strong px-3 text-xs font-medium text-ink-soft"
+    <button
+      type="button"
+      title={title}
+      onClick={() => void connectServices()}
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-line-strong px-3 text-xs font-medium text-ink-soft transition-colors hover:border-stone-500 hover:text-ink"
     >
-      <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-      Placeholder AI
-    </span>
+      <span aria-hidden className={cx('size-1.5 rounded-full', text.live && illustration.live ? 'bg-danger' : 'bg-accent')} />
+      {label}
+    </button>
   )
 }
 
