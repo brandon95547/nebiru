@@ -1,0 +1,95 @@
+# Nebiru, complete: the application and its illustration engine.
+#
+#   ./nebiru start        (or: cp .env.example .env && docker compose up -d --build)
+#
+# Settings live in .env. Everything that must outlive a container is under
+# ${NEBIRU_DATA} (./data by default): books, generated images, model files.
+
+name: nebiru
+
+services:
+  # The web app and its API, in one container.
+  nebiru:
+    build: .
+    image: nebiru-app
+    restart: unless-stopped
+    ports:
+      - "${NEBIRU_BIND:-127.0.0.1}:${NEBIRU_PORT:-8787}:8787"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-}
+      DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS:-180}
+      DEEPSEEK_MAX_RETRIES: ${DEEPSEEK_MAX_RETRIES:-1}
+      NEBIRU_CHAPTER_WORDS: ${NEBIRU_CHAPTER_WORDS:-1500}
+      COMFYUI_URL: http://comfyui:8188
+      COMFYUI_PIPELINE: flux
+      COMFYUI_BASE_SIZE: ${FLUX_SIZE:-1024}
+      COMFYUI_STEPS: ${FLUX_STEPS:-24}
+      COMFYUI_TIMEOUT_SECONDS: ${FLUX_TIMEOUT_SECONDS:-600}
+      # Optional custom workflow, as a path inside the container (/data is the nebiru data folder).
+      COMFYUI_WORKFLOW: ${COMFYUI_WORKFLOW:-}
+      FLUX_GUIDANCE: ${FLUX_GUIDANCE:-3.5}
+      FLUX_UNET_FILE: flux1-dev-${FLUX_QUANT:-Q5_K_S}.gguf
+      FLUX_T5_FILE: ${FLUX_T5_FILE:-t5xxl_fp8_e4m3fn.safetensors}
+      NEBIRU_MODEL_STATUS_FILE: /models/.nebiru/download.json
+    volumes:
+      - ${NEBIRU_DATA:-./data}/nebiru:/data
+      # Read-only: only to see how far the model download has got.
+      - ${NEBIRU_DATA:-./data}/models:/models:ro
+    depends_on:
+      comfyui:
+        condition: service_started
+        # The app runs without illustrations when ComfyUI is switched off.
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ComfyUI running FLUX.1 Dev (quantized GGUF). Reached only by the app:
+  # no port is published. Needs an NVIDIA GPU and the NVIDIA Container Toolkit.
+  comfyui:
+    profiles: ["art"]
+    build:
+      context: docker/comfyui
+      args:
+        COMFYUI_REF: ${COMFYUI_REF:-v0.39.0}
+        COMFYUI_GGUF_REF: ${COMFYUI_GGUF_REF:-6ea2651e7df66d7585f6ffee804b20e92fb38b8a}
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu126}
+    image: nebiru-comfyui
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      FLUX_UNET_FILE: flux1-dev-${FLUX_QUANT:-Q5_K_S}.gguf
+      FLUX_T5_FILE: ${FLUX_T5_FILE:-t5xxl_fp8_e4m3fn.safetensors}
+      HF_TOKEN: ${HF_TOKEN:-}
+      NEBIRU_SKIP_MODEL_DOWNLOAD: ${NEBIRU_SKIP_MODEL_DOWNLOAD:-}
+      # Empty means the default source on Hugging Face.
+      FLUX_UNET_URL: ${FLUX_UNET_URL:-}
+      FLUX_T5_URL: ${FLUX_T5_URL:-}
+      FLUX_CLIP_L_URL: ${FLUX_CLIP_L_URL:-}
+      FLUX_VAE_URL: ${FLUX_VAE_URL:-}
+      COMFYUI_ARGS: ${COMFYUI_ARGS:-}
+    volumes:
+      - ${NEBIRU_DATA:-./data}/models:/opt/ComfyUI/models
+      - ${NEBIRU_DATA:-./data}/comfyui:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8188/system_stats', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # The first start downloads the models before ComfyUI answers.
+      start_period: 2h

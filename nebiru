@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Install, start and look after Nebiru with Docker.
+#
+#   ./nebiru start     set up on first run, then build and start everything
+#   ./nebiru stop      stop everything (your data stays in the data folder)
+#   ./nebiru status    what is running and which AI features are ready
+#   ./nebiru logs      follow the logs (optionally: ./nebiru logs comfyui)
+#   ./nebiru update    fetch the latest version and restart
+#   ./nebiru setup     write .env again from this machine's GPU and user
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'nebiru: %s\n' "$*" >&2; exit 1; }
+
+need_docker() {
+  command -v docker >/dev/null 2>&1 || die "Docker is not installed. See https://docs.docker.com/get-docker/"
+  docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is needed (the 'docker compose' command)."
+  docker info >/dev/null 2>&1 || die "Docker is installed but not running. Start it and try again."
+}
+
+# set_env KEY VALUE: set a variable in .env, replacing its line if it has one.
+set_env() {
+  local tmp
+  tmp=$(mktemp)
+  if grep -q -E "^$1=" .env; then
+    KEY="$1" VALUE="$2" awk 'index($0, ENVIRON["KEY"] "=") == 1 { print ENVIRON["KEY"] "=" ENVIRON["VALUE"]; next } { print }' .env >"$tmp"
+  else
+    cat .env >"$tmp"
+    printf '%s=%s\n' "$1" "$2" >>"$tmp"
+  fi
+  cat "$tmp" >.env
+  rm -f "$tmp"
+}
+
+get_env() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+
+# Memory of the largest NVIDIA GPU in MB, or nothing when there is none.
+gpu_memory() {
+  command -v nvidia-smi >/dev/null 2>&1 || return 0
+  nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | tail -1 | tr -d ' '
+}
+
+# The largest FLUX.1 Dev quantization that sits comfortably in that much memory.
+pick_quant() {
+  if [ "$1" -lt 10000 ]; then echo Q4_K_S
+  elif [ "$1" -lt 14000 ]; then echo Q5_K_S
+  elif [ "$1" -lt 20000 ]; then echo Q6_K
+  else echo Q8_0; fi
+}
+
+setup() {
+  need_docker
+  if [ ! -f .env ]; then
+    cp .env.example .env
+    chmod 600 .env
+    say "Created .env from .env.example."
+  fi
+  set_env PUID "$(id -u)"
+  set_env PGID "$(id -g)"
+
+  local memory quant
+  memory=$(gpu_memory)
+  if [ -n "$memory" ]; then
+    quant=$(pick_quant "$memory")
+    set_env COMPOSE_PROFILES art
+    set_env FLUX_QUANT "$quant"
+    say "Found an NVIDIA GPU with $(((memory + 512) / 1024)) GB: illustrations will use FLUX.1 Dev $quant."
+    if ! docker info 2>/dev/null | grep -qi nvidia; then
+      say "Docker does not list the NVIDIA runtime. If ComfyUI fails to start, install the"
+      say "NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/"
+    fi
+  else
+    set_env COMPOSE_PROFILES ""
+    say "No NVIDIA GPU found: Nebiru will run with placeholder art instead of FLUX."
+    say "(On a GPU machine, run ./nebiru setup again.)"
+  fi
+
+  if [ -z "$(get_env DEEPSEEK_API_KEY)" ]; then
+    if [ -t 0 ]; then
+      local key
+      read -r -s -p "DeepSeek API key (Enter to skip; writing will use placeholders): " key
+      echo
+      [ -n "$key" ] && set_env DEEPSEEK_API_KEY "$key"
+    else
+      say "DEEPSEEK_API_KEY is empty in .env: writing will use placeholders until you set it."
+    fi
+  fi
+  mkdir -p "$(get_env NEBIRU_DATA | sed 's/^$/.\/data/')"
+}
+
+address() {
+  local bind port
+  bind=$(get_env NEBIRU_BIND); port=$(get_env NEBIRU_PORT)
+  [ "${bind:-127.0.0.1}" = "0.0.0.0" ] && bind=$(hostname)
+  echo "http://${bind:-127.0.0.1}:${port:-8787}"
+}
+
+start() {
+  [ -f .env ] || setup
+  need_docker
+  docker compose up -d --build
+  say
+  say "Nebiru is running at $(address)"
+  if [ -n "$(get_env COMPOSE_PROFILES)" ]; then
+    say "The first start downloads the FLUX model files (about 12 to 18 GB). Until that"
+    say "finishes, illustrations use placeholder art; follow it with: ./nebiru logs comfyui"
+  fi
+}
+
+status() {
+  need_docker
+  docker compose ps
+  say
+  docker compose exec -T nebiru python -c '
+import json, urllib.request
+status = json.load(urllib.request.urlopen("http://127.0.0.1:8787/api/status", timeout=20))
+for name, label in (("text", "Writing (DeepSeek)"), ("illustration", "Illustration (FLUX)")):
+    state = status[name]
+    print(f"{label}: {\"ready\" if state[\"available\"] else \"not ready\"}" + (f" - {state[\"detail\"]}" if state["detail"] else ""))
+' 2>/dev/null || say "The app is not answering yet."
+}
+
+case "${1:-}" in
+  setup) setup ;;
+  start) start ;;
+  stop) need_docker; docker compose down ;;
+  status) status ;;
+  logs) need_docker; shift; docker compose logs -f --tail=100 "$@" ;;
+  update) need_docker; git pull --ff-only; docker compose up -d --build ;;
+  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

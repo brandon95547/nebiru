@@ -171,7 +171,7 @@ def test_status_without_a_key_or_comfy(make_client, network: Recorder) -> None:
 
     network.handler = refuse
     status = make_client(deepseek_api_key="").get("/api/status").json()
-    assert status["text"] == {"available": False, "detail": "DEEPSEEK_API_KEY is not set in server/.env."}
+    assert status["text"] == {"available": False, "detail": "DEEPSEEK_API_KEY is not set."}
     assert status["illustration"] == {"available": False, "detail": f"ComfyUI is not reachable at {COMFY}."}
 
 

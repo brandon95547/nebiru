@@ -1,0 +1,17 @@
+# Run the illustration engine on a machine with no NVIDIA GPU.
+#
+# FLUX on a CPU takes many minutes per picture and a lot of memory, so this is
+# for checking that the stack works, not for making books. To use it, set in .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.cpu.yml
+#
+# and rebuild:  docker compose up -d --build
+
+services:
+  comfyui:
+    build:
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
+    environment:
+      COMFYUI_ARGS: --cpu
+    deploy: !reset null

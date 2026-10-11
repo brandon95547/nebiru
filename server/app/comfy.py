@@ -39,7 +39,7 @@ def dimensions(aspect: float, base: int) -> tuple[int, int]:
     return snap(width), snap(height)
 
 
-def default_workflow(values: dict[str, Any]) -> dict[str, Any]:
+def checkpoint_workflow(values: dict[str, Any]) -> dict[str, Any]:
     """Text-to-image with a single checkpoint: works for SD 1.5 and SDXL models."""
     return {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": values["%checkpoint%"]}},
@@ -83,9 +83,50 @@ def fill_workflow(node: Any, values: dict[str, Any]) -> Any:
     return node
 
 
-def _checkpoint_names(info: dict[str, Any]) -> list[str]:
+def flux_workflow(values: dict[str, Any]) -> dict[str, Any]:
+    """Text-to-image with FLUX.1 Dev loaded from a quantized GGUF file.
+
+    Dev is guidance-distilled: the sampler runs at cfg 1 with an empty negative
+    prompt, and the strength of the prompt is set by the FluxGuidance node.
+    """
+    return {
+        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": values["%unet%"]}},
+        "2": {
+            "class_type": "DualCLIPLoader",
+            "inputs": {"clip_name1": values["%t5%"], "clip_name2": values["%clip_l%"], "type": "flux"},
+        },
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": values["%vae%"]}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": values["%prompt%"], "clip": ["2", 0]}},
+        "5": {"class_type": "FluxGuidance", "inputs": {"conditioning": ["4", 0], "guidance": values["%guidance%"]}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["2", 0]}},
+        "7": {
+            "class_type": "EmptySD3LatentImage",
+            "inputs": {"width": values["%width%"], "height": values["%height%"], "batch_size": 1},
+        },
+        "8": {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": ["1", 0],
+                "positive": ["5", 0],
+                "negative": ["6", 0],
+                "latent_image": ["7", 0],
+                "seed": values["%seed%"],
+                "steps": values["%steps%"],
+                "cfg": 1.0,
+                "sampler_name": values["%sampler%"],
+                "scheduler": values["%scheduler%"],
+                "denoise": 1.0,
+            },
+        },
+        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
+        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "nebiru"}},
+    }
+
+
+def _options(info: dict[str, Any], node: str, field: str) -> list[str]:
+    """The choices ComfyUI offers for one input of a node, e.g. the model files it can see."""
     try:
-        spec = info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"]
+        spec = info[node]["input"]["required"][field]
     except (KeyError, TypeError):
         return []
     if spec and isinstance(spec[0], list):
@@ -131,9 +172,35 @@ class ComfyUI:
         except httpx.HTTPError:
             raise NotConfigured(f"ComfyUI is not reachable at {self._settings.comfyui_url}.") from None
 
+    async def _choices(self, node: str, field: str) -> list[str] | None:
+        """Choices for a node input, or None when ComfyUI does not have that node at all."""
+        response = await self._get(f"/object_info/{node}", timeout=10.0)
+        info = response.json() if response.status_code == 200 else {}
+        return _options(info, node, field) if node in info else None
+
     async def checkpoints(self) -> list[str]:
-        response = await self._get("/object_info/CheckpointLoaderSimple", timeout=10.0)
-        return _checkpoint_names(response.json()) if response.status_code == 200 else []
+        return await self._choices("CheckpointLoaderSimple", "ckpt_name") or []
+
+    async def _flux_problem(self) -> str | None:
+        """Check that ComfyUI has the GGUF loader and every file FLUX needs."""
+        settings = self._settings
+        if not settings.flux_unet:
+            return "FLUX_UNET_FILE is not set."
+        unets = await self._choices("UnetLoaderGGUF", "unet_name")
+        if unets is None:
+            return "ComfyUI is missing the GGUF loader (the ComfyUI-GGUF custom node)."
+        encoders = await self._choices("DualCLIPLoader", "clip_name1") or []
+        vaes = await self._choices("VAELoader", "vae_name") or []
+        wanted = [
+            (settings.flux_unet, unets),
+            (settings.flux_t5, encoders),
+            (settings.flux_clip_l, encoders),
+            (settings.flux_vae, vaes),
+        ]
+        missing = [name for name, available in wanted if name not in available]
+        if missing:
+            return f"ComfyUI does not have {', '.join(missing)} yet."
+        return None
 
     async def _checkpoint(self) -> str:
         """The configured checkpoint, or the first one ComfyUI already has. Nothing is downloaded."""
@@ -153,6 +220,8 @@ class ComfyUI:
             workflow = self._custom_workflow
             if workflow:
                 return None if workflow.is_file() else f"The workflow file {workflow} does not exist."
+            if self._settings.comfyui_pipeline == "flux":
+                return await self._flux_problem()
             await self._checkpoint()
         except NotConfigured as error:
             return error.message
@@ -176,9 +245,20 @@ class ComfyUI:
             # A custom workflow names its own models, so only look one up when it asks.
             "%checkpoint%": settings.comfyui_checkpoint,
         }
+        if custom is None and settings.comfyui_pipeline == "flux":
+            values.update(
+                {
+                    "%unet%": settings.flux_unet,
+                    "%t5%": settings.flux_t5,
+                    "%clip_l%": settings.flux_clip_l,
+                    "%vae%": settings.flux_vae,
+                    "%guidance%": settings.flux_guidance,
+                }
+            )
+            return flux_workflow(values)
         if custom is None:
             values["%checkpoint%"] = await self._checkpoint()
-            return default_workflow(values)
+            return checkpoint_workflow(values)
         try:
             raw = custom.read_text()
             template = json.loads(raw)

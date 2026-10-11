@@ -8,17 +8,21 @@ from __future__ import annotations
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import httpx
-from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, FastAPI, Request
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
+from starlette.types import Scope
 
 from .comfy import ComfyUI
 from .config import Settings, load_settings
 from .deepseek import DeepSeek
+from .downloads import download_message
 from .errors import ServiceError
+from .library import Library
 from .schemas import (
     BookPlan,
     ChapterDraft,
@@ -42,6 +46,22 @@ from .text_service import TextService
 BALANCE_CACHE_S = 120.0
 
 
+class WebApp(StaticFiles):
+    """Serves the built web app, answering any unknown page address with the app itself.
+
+    The app routes in the browser (/book/abc is not a file), so a reload on any of its
+    pages must return index.html. Addresses under /api never fall through to it.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as error:
+            if error.status_code != 404 or path.startswith("api/") or path == "api":
+                raise
+            return await super().get_response("index.html", scope)
+
+
 class Services:
     """Everything a request needs, built once when the server starts."""
 
@@ -50,6 +70,7 @@ class Services:
         self.deepseek = DeepSeek(settings, client)
         self.text = TextService(self.deepseek, settings)
         self.comfy = ComfyUI(settings, client)
+        self.library = Library(settings.books_dir)
         self._balance: tuple[float, str] | None = None
 
     async def text_state(self) -> ServiceState:
@@ -77,13 +98,17 @@ class Services:
 
     async def illustration_state(self) -> ServiceState:
         problem = await self.comfy.problem()
-        return ServiceState(available=problem is None, detail=problem or "")
+        if problem is None:
+            return ServiceState(available=True)
+        # While the models are still arriving, say that rather than "not reachable".
+        return ServiceState(available=False, detail=download_message(self.settings.model_status_file) or problem)
 
 
 def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
     """Build the app. Tests pass their own settings and a fake HTTP transport."""
     settings = settings or load_settings()
     settings.images_dir.mkdir(parents=True, exist_ok=True)
+    settings.books_dir.mkdir(parents=True, exist_ok=True)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -101,6 +126,24 @@ def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTrans
         return request.app.state.services
 
     api = APIRouter(prefix="/api")
+
+    @api.get("/health")
+    async def health() -> dict[str, bool]:
+        return {"ok": True}
+
+    @api.get("/books")
+    async def list_books(request: Request) -> dict[str, list[dict[str, Any]]]:
+        return {"books": services(request).library.all()}
+
+    @api.put("/books/{book_id}")
+    async def save_book(book_id: str, request: Request, book: dict[str, Any] = Body(...)) -> dict[str, bool]:
+        services(request).library.save(book_id, book)
+        return {"ok": True}
+
+    @api.delete("/books/{book_id}")
+    async def delete_book(book_id: str, request: Request) -> dict[str, bool]:
+        services(request).library.delete(book_id)
+        return {"ok": True}
 
     @api.get("/status", response_model=Status)
     async def status(request: Request) -> Status:
@@ -140,6 +183,8 @@ def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTrans
 
     app.include_router(api)
     app.mount("/api/images", StaticFiles(directory=settings.images_dir), name="images")
+    if settings.static_dir and settings.static_dir.is_dir():
+        app.mount("/", WebApp(directory=settings.static_dir, html=True), name="web")
     return app
 
 
