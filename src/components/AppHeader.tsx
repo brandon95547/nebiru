@@ -2,6 +2,24 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { cx } from '@/lib/util'
 import { connectServices, useServiceStatus } from '@/services'
+import { retrySaves, useLibrary } from '@/store/library'
+
+/** Appears only while recent changes have not reached the server. Clicking it tries again. */
+export function SaveStatus() {
+  const unsaved = useLibrary((state) => state.unsaved)
+  if (!unsaved) return null
+  return (
+    <button
+      type="button"
+      title="The Nebiru server could not be reached, so your latest changes are being kept in this browser. They are sent as soon as the server answers. Click to try now."
+      onClick={retrySaves}
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-red-400/50 px-3 text-xs font-medium text-red-200 transition-colors hover:border-red-300"
+    >
+      <span aria-hidden className="size-1.5 rounded-full bg-danger" />
+      Not saved to the server
+    </button>
+  )
+}
 
 /**
  * Says which AI features are running on stand-ins instead of real models, or
@@ -58,6 +76,7 @@ export function AppHeader({ children }: { children?: ReactNode }) {
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-6">
         <Wordmark />
         <ServiceStatus />
+        <SaveStatus />
         <div className="ml-auto flex items-center gap-3">{children}</div>
       </div>
     </header>

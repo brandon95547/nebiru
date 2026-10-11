@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
-import { ServiceStatus } from '@/components/AppHeader'
+import { SaveStatus, ServiceStatus } from '@/components/AppHeader'
 import { Button, IconButton } from '@/components/ui/Button'
 import { Field, Textarea } from '@/components/ui/Field'
 import { Menu, Modal } from '@/components/ui/Overlay'
@@ -252,6 +252,7 @@ function Workspace({ book }: { book: Book }) {
             <Plus className="size-4" />
           </IconButton>
           <Divider />
+          <SaveStatus />
           <ServiceStatus />
           <Button variant="secondary" size="sm" onClick={() => setPreview(true)}>
             <Eye className="size-4" /> Preview

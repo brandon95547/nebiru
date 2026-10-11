@@ -32,12 +32,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+function send<T>(method: string, path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
+  post: <T>(path: string, body: unknown) => send<T>('POST', path, body),
+  put: <T = unknown>(path: string, body: unknown) => send<T>('PUT', path, body),
+  delete: <T = unknown>(path: string) => request<T>(path, { method: 'DELETE' }),
 }

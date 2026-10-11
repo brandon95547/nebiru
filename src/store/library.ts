@@ -1,42 +1,87 @@
 import type { JSONContent } from '@tiptap/core'
-import { del, entries, set as idbSet } from 'idb-keyval'
 import { create } from 'zustand'
 import { DEFAULT_PAGE } from '@/lib/bookFormats'
 import { mapIllustrations, patchIllustration } from '@/lib/doc'
 import { uid } from '@/lib/util'
 import type { Book, BookOrigin, Chapter, IllustrationAttrs, SourceDocument } from '@/types'
+import { deleteBook, keepInBrowser, loadBooks, saveBook, type StorageMode } from './persistence'
 
-/** The library: every book project, held in memory and mirrored to IndexedDB. */
+/** The library: every book project, held in memory and saved as it changes. */
 
-const KEY_PREFIX = 'book:'
 const SAVE_DELAY_MS = 400
 
 interface LibraryState {
   ready: boolean
   books: Record<string, Book>
+  /** Where books are kept: on the Nebiru server, or in this browser when there is no server. */
+  storage: StorageMode
+  /** True while the latest changes have not reached the server (they are safe in this browser). */
+  unsaved: boolean
 }
 
-export const useLibrary = create<LibraryState>()(() => ({ ready: false, books: {} }))
+export const useLibrary = create<LibraryState>()(() => ({ ready: false, books: {}, storage: 'browser', unsaved: false }))
 
 const saveTimers = new Map<string, number>()
+/** Books with a save on its way, and those that changed again while it was. */
+const saving = new Set<string>()
+const changedMeanwhile = new Set<string>()
+const failed = new Set<string>()
 
-function persist(id: string): void {
+/** Save one book. Saves for the same book never overlap, so an older one cannot land last. */
+async function persist(id: string): Promise<void> {
   saveTimers.delete(id)
+  if (saving.has(id)) {
+    changedMeanwhile.add(id)
+    return
+  }
   const book = useLibrary.getState().books[id]
-  if (book) void idbSet(KEY_PREFIX + id, book)
+  if (!book) return
+
+  saving.add(id)
+  const reached = await saveBook(book)
+  saving.delete(id)
+  if (reached) failed.delete(id)
+  else failed.add(id)
+  useLibrary.setState({ unsaved: failed.size > 0 })
+
+  if (changedMeanwhile.delete(id)) void persist(id)
+  else if (!reached) scheduleRetry()
+}
+
+const RETRY_DELAY_MS = 15_000
+let retryTimer: number | undefined
+
+/** Keep trying in the background until the server has everything. */
+function scheduleRetry(): void {
+  if (retryTimer !== undefined) return
+  retryTimer = window.setTimeout(() => {
+    retryTimer = undefined
+    retrySaves()
+  }, RETRY_DELAY_MS)
 }
 
 function schedulePersist(id: string): void {
   window.clearTimeout(saveTimers.get(id))
-  saveTimers.set(id, window.setTimeout(() => persist(id), SAVE_DELAY_MS))
+  saveTimers.set(id, window.setTimeout(() => void persist(id), SAVE_DELAY_MS))
 }
 
-/** Write any pending saves immediately (page hide, tab close). */
+/**
+ * Write pending saves immediately (page hide, tab close). A request made as the
+ * page goes away may not finish, so each book is also kept in the browser; the
+ * next start hands over anything the server did not get.
+ */
 export function flushSaves(): void {
+  const { books, storage } = useLibrary.getState()
   for (const [id, timer] of saveTimers) {
     window.clearTimeout(timer)
-    persist(id)
+    if (storage === 'server' && books[id]) void keepInBrowser(books[id])
+    void persist(id)
   }
+}
+
+/** Try again to save everything that has not reached the server. */
+export function retrySaves(): void {
+  for (const id of failed) void persist(id)
 }
 
 /**
@@ -67,15 +112,10 @@ function settle(book: Book): Book {
 }
 
 export async function initLibrary(): Promise<void> {
+  const loaded = await loadBooks()
   const books: Record<string, Book> = {}
-  try {
-    for (const [key, value] of await entries<IDBValidKey, Book>()) {
-      if (typeof key === 'string' && key.startsWith(KEY_PREFIX)) books[value.id] = settle(value)
-    }
-  } catch (error) {
-    console.error('Could not read saved books', error)
-  }
-  useLibrary.setState({ books, ready: true })
+  for (const book of loaded.books) books[book.id] = settle(book)
+  useLibrary.setState({ books, storage: loaded.mode, ready: true })
 }
 
 export function getBook(id: string): Book | undefined {
@@ -152,7 +192,8 @@ export function removeBook(id: string): void {
     delete books[id]
     return { books }
   })
-  void del(KEY_PREFIX + id)
+  failed.delete(id)
+  void deleteBook(id)
 }
 
 export function patchChapter(bookId: string, chapterId: string, patch: Partial<Chapter>): void {
