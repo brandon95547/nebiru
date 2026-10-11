@@ -53,12 +53,17 @@ BASE_NEGATIVE = "text, lettering, words, watermark, signature, logo, frame, bord
 
 COVER_POSITIVE = "book cover art, strong central composition, calm uncluttered area near the top"
 
+# A picture on a dark page should sit in it, not glare out of it as a pale box.
+DARK_PAGE_POSITIVE = "set against a deep black background, low-key lighting, rich shadows"
 
-def build_prompts(prompt: str, style_id: str, purpose: str) -> tuple[str, str]:
+
+def build_prompts(prompt: str, style_id: str, purpose: str, theme: str = "light") -> tuple[str, str]:
     """The positive and negative prompt for one picture."""
     style = STYLES.get(style_id, STYLES[DEFAULT_STYLE])
     subject = " ".join(prompt.split()).rstrip(".,; ")
     parts = [subject, style.positive]
+    if theme == "dark":
+        parts.append(DARK_PAGE_POSITIVE)
     if purpose == "cover":
         parts.append(COVER_POSITIVE)
     negative = ", ".join(part for part in (BASE_NEGATIVE, style.negative) if part)

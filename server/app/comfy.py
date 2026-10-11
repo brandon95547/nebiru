@@ -229,7 +229,7 @@ class ComfyUI:
 
     async def _workflow(self, request: IllustrationRequest, seed: int) -> dict[str, Any]:
         settings = self._settings
-        positive, negative = build_prompts(request.prompt, request.style_id, request.purpose)
+        positive, negative = build_prompts(request.prompt, request.style_id, request.purpose, request.theme)
         width, height = dimensions(request.aspect, settings.comfyui_base_size)
         custom = self._custom_workflow
         values: dict[str, Any] = {

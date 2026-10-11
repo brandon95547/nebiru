@@ -199,3 +199,13 @@ def test_cover_prompts_ask_for_a_cover_composition() -> None:
     assert positive.endswith("calm uncluttered area near the top")
     assert negative.startswith("text, lettering")
     assert build_prompts("x", "no-such-style", "interior")[0].startswith("x, watercolor")
+
+
+def test_pictures_for_dark_pages_are_drawn_on_a_dark_ground(client: TestClient, network: Recorder, monkeypatch) -> None:
+    monkeypatch.setattr("app.comfy.POLL_INTERVAL_S", 0)
+    network.handler = comfy()
+    client.post("/api/illustrations", json={**REQUEST, "theme": "dark"})
+    client.post("/api/illustrations", json=REQUEST)
+    dark, light = (body["prompt"]["2"]["inputs"]["text"] for body in network.bodies("/prompt"))
+    assert "deep black background" in dark
+    assert "black background" not in light
