@@ -84,7 +84,7 @@ function EmptyLibrary() {
         >
           <FileUp aria-hidden className="size-6 text-accent" />
           <h2 className="mt-4 text-lg font-medium text-ink">Import material</h2>
-          <p className="mt-1 text-ink-soft">EPUB, PDF, Word, text and HTML files, read right in your browser.</p>
+          <p className="mt-1 text-ink-soft">EPUB, PDF, Word, text and HTML files, or photos of the pages.</p>
         </Link>
       </div>
     </div>

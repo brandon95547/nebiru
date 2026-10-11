@@ -39,7 +39,10 @@ function planned(chapter: WirePlannedChapter): PlannedChapter {
 
 export const remoteText: TextService = {
   async planBook(input) {
-    const body = input.kind === 'concept' ? input : { kind: 'import', mode: input.mode, sources: input.sources.map(digest) }
+    const body =
+      input.kind === 'concept'
+        ? input
+        : { kind: 'import', mode: input.mode, instruction: input.instruction ?? '', sources: input.sources.map(digest) }
     const plan = await api.post<Omit<BookPlan, 'chapters'> & { chapters: WirePlannedChapter[] }>('/text/plan', body)
     return { ...plan, chapters: plan.chapters.map(planned) }
   },

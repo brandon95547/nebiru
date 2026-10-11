@@ -48,6 +48,8 @@ def _book_card(brief: Brief) -> str:
         lines.append(f"About the book: {brief.description}")
     if brief.origin.kind == "concept" and brief.origin.concept:
         lines.append(f"The author's original concept: {brief.origin.concept}")
+    if brief.origin.instruction:
+        lines.append(f"What the author asked Nebiru to make: {brief.origin.instruction}")
     return "\n".join(lines)
 
 
@@ -77,6 +79,16 @@ Chapter titles are the names of the chapters only, without "Chapter 1" style num
     return [{"role": "system", "content": ROLE}, {"role": "user", "content": user}]
 
 
+def _request_note(request: PlanRequest) -> str:
+    """The author's own instruction for an import, as a paragraph for a planning prompt."""
+    if not request.instruction.strip():
+        return ""
+    return (
+        f"\n\nThe author also said what they want made from this material:\n{request.instruction.strip()}\n"
+        "Let that guide the plan wherever it applies."
+    )
+
+
 def _source_index(request: PlanRequest) -> str:
     blocks = []
     for source in request.sources:
@@ -97,7 +109,7 @@ def plan_adaptation(request: PlanRequest) -> list[dict[str, str]]:
 
 Here is an index of the source. Each line gives a section id in square brackets, its title, its length and how it opens.
 
-{_source_index(request)}
+{_source_index(request)}{_request_note(request)}
 
 Plan the new book. Return a JSON object with these keys:
 - "title": a title for the new book, its own rather than a copy of the source's.
@@ -113,7 +125,7 @@ def describe_preserved(request: PlanRequest) -> list[dict[str, str]]:
 
 Here is an index of the text. Each line gives a section id in square brackets, its title, its length and how it opens.
 
-{_source_index(request)}
+{_source_index(request)}{_request_note(request)}
 
 Return a JSON object with these keys:
 - "title": the book's title. Use the title given in the index if there is one; otherwise propose a fitting one.
@@ -188,7 +200,7 @@ Chapter {chapter_index + 1}, “{chapter.title}”, reads:
 
 {_words(text, 2500)}
 
-Choose {count} moment{'s' if count > 1 else ''} from this chapter that would make the strongest illustration{'s' if count > 1 else ''}, spread through the chapter rather than bunched together. {ILLUSTRATION_BRIEF}
+Choose {count} moment{'s' if count > 1 else ''} from this chapter that would make the strongest illustration{'s' if count > 1 else ''}, spread through the chapter rather than bunched together. If the page is a list, an index or a table of contents rather than a narrative, describe instead an emblem or a scene that stands for the book as a whole. Where the author's request says how the book should look or feel, let the subject and mood of the picture follow it. {ILLUSTRATION_BRIEF}
 
 Return a JSON object with one key, "prompts": an array of {count} string{'s' if count > 1 else ''}."""
     return [{"role": "system", "content": ROLE}, {"role": "user", "content": user}]

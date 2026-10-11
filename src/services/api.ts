@@ -41,4 +41,11 @@ export const api = {
   post: <T>(path: string, body: unknown) => send<T>('POST', path, body),
   put: <T = unknown>(path: string, body: unknown) => send<T>('PUT', path, body),
   delete: <T = unknown>(path: string) => request<T>(path, { method: 'DELETE' }),
+  /** Send a file as the request body. */
+  upload: <T>(path: string, file: File) =>
+    request<T>(path, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    }),
 }

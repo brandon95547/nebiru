@@ -22,7 +22,7 @@ export interface BookPlan {
 
 export type PlanInput =
   | { kind: 'concept'; concept: string; chapterCount: number }
-  | { kind: 'import'; mode: 'preserve' | 'adapt'; sources: SourceDocument[] }
+  | { kind: 'import'; mode: 'preserve' | 'adapt'; sources: SourceDocument[]; instruction?: string }
 
 /** Compact description of the book, sent with every request as context. */
 export interface BookBrief {

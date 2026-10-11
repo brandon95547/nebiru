@@ -59,6 +59,7 @@ export function NewBookPage() {
   const [author, setAuthor] = useState('')
   const [rows, setRows] = useState<SourceRow[]>([])
   const [importMode, setImportMode] = useState<'preserve' | 'adapt'>('preserve')
+  const [instruction, setInstruction] = useState('')
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -69,7 +70,10 @@ export function NewBookPage() {
   const canSubmit = !busy && (mode === 'idea' ? concept.trim().length >= 10 : sources.length > 0 && !reading)
 
   const addFiles = (files: FileList | File[]) => {
-    for (const file of Array.from(files)) {
+    // Photographed pages are named in the order they were taken (IMG_6351, IMG_6352, …),
+    // so a batch is read in name order whatever order the files were dropped in.
+    const batch = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    for (const file of batch) {
       const id = uid('row')
       setRows((current) => [...current, { id, name: file.name, status: 'reading' }])
       void importFile(file).then((outcome) => {
@@ -99,12 +103,15 @@ export function NewBookPage() {
     setBusy(true)
     setError('')
     try {
+      const wish = instruction.trim() || undefined
       const input: PlanInput =
         mode === 'idea'
           ? { kind: 'concept', concept: concept.trim(), chapterCount }
-          : { kind: 'import', mode: importMode, sources }
+          : { kind: 'import', mode: importMode, sources, instruction: wish }
       const origin: BookOrigin =
-        mode === 'idea' ? { kind: 'concept', concept: concept.trim() } : { kind: 'import', mode: importMode }
+        mode === 'idea'
+          ? { kind: 'concept', concept: concept.trim() }
+          : { kind: 'import', mode: importMode, instruction: wish }
       const plan = await services.text.planBook(input)
       const book = createBook({
         title: plan.title,
@@ -210,7 +217,8 @@ export function NewBookPage() {
                 <FileUp aria-hidden className="mx-auto size-8 text-accent" />
                 <p className="mt-3 text-lg text-ink">Drop files here</p>
                 <p className="mt-1 text-ink-soft">
-                  EPUB, PDF, Word (.docx), text, Markdown and HTML are read in your browser.
+                  EPUB, PDF, Word (.docx), text, Markdown and HTML, plus photos and scans of pages (JPEG,
+                  PNG, HEIC).
                 </p>
                 <Button variant="secondary" className="mt-5" onClick={() => fileInput.current?.click()}>
                   Choose files
@@ -279,6 +287,18 @@ export function NewBookPage() {
                   ))}
                 </div>
               </fieldset>
+
+              <Field
+                label="Anything specific you want made from it?"
+                hint="Optional. Say what the result should be or how it should look; it guides the plan and the illustrations."
+              >
+                <Textarea
+                  rows={3}
+                  value={instruction}
+                  onChange={(event) => setInstruction(event.target.value)}
+                  placeholder="A new illustrated table of contents in a dark, gothic design…"
+                />
+              </Field>
 
               <Field label="Author name" className="max-w-sm">
                 <Input value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="Optional" />

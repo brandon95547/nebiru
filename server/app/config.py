@@ -53,6 +53,10 @@ class Settings:
     flux_vae: str = "ae.safetensors"
     flux_guidance: float = 3.5
 
+    # Model used to read uploaded page images. Blank = the writing model. Not every
+    # model looks at images, so this can name one that does.
+    deepseek_vision_model: str = ""
+
     # The built web app, when this server also serves it (the Docker image does).
     static_dir: Path | None = None
     # Progress file written by the ComfyUI container while it downloads models.
@@ -111,6 +115,7 @@ def load_settings() -> Settings:
         flux_t5=env.get("FLUX_T5_FILE", "").strip() or "t5xxl_fp8_e4m3fn.safetensors",
         flux_vae=env.get("FLUX_VAE_FILE", "").strip() or "ae.safetensors",
         flux_guidance=_float("FLUX_GUIDANCE", 3.5),
+        deepseek_vision_model=env.get("DEEPSEEK_VISION_MODEL", "").strip(),
         static_dir=_path("NEBIRU_STATIC_DIR"),
         model_status_file=_path("NEBIRU_MODEL_STATUS_FILE"),
     )

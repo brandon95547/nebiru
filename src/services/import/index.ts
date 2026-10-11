@@ -1,6 +1,8 @@
 import { countWords, uid } from '@/lib/util'
 import type { SourceDocument } from '@/types'
+import { useServiceStatus } from '../index'
 import { parseHtml } from './html'
+import { IMAGE_FILE_EXTENSIONS, isImageFile, parseImage } from './image'
 import { parseMarkdown, parsePlainText } from './text'
 import type { ImportOutcome, ParsedDocument } from './types'
 
@@ -16,6 +18,7 @@ const MEDIA = new Set([
 /** Everything the file picker should offer. */
 export const ACCEPTED_EXTENSIONS = [
   'epub', 'pdf', 'docx', 'txt', 'md', 'html', 'htm',
+  ...IMAGE_FILE_EXTENSIONS,
   ...KINDLE,
   ...MEDIA,
 ]
@@ -30,6 +33,7 @@ export function isMediaFile(file: File): boolean {
 }
 
 async function parse(file: File, ext: string): Promise<ParsedDocument | null> {
+  if (isImageFile(file, ext)) return parseImage(file)
   switch (ext) {
     case 'txt':
     case 'text':
@@ -60,6 +64,9 @@ export async function importFile(file: File): Promise<ImportOutcome> {
   }
   if (KINDLE.has(ext) || OTHER_DOCS.has(ext)) {
     return { status: 'needs-service', reason: `.${ext} files are converted by the import service, which is not connected yet.` }
+  }
+  if (isImageFile(file, ext) && !useServiceStatus.getState().text.live) {
+    return { status: 'needs-service', reason: 'Images are read by the writing service, which is not connected.' }
   }
 
   try {

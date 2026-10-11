@@ -19,6 +19,8 @@ class Origin(Model):
     kind: Literal["concept", "import"]
     concept: str = ""
     mode: Literal["preserve", "adapt"] | None = None
+    # What the author asked Nebiru to make from imported material.
+    instruction: str = ""
 
 
 class BriefChapter(Model):
@@ -68,6 +70,7 @@ class PlanRequest(Model):
     concept: str = ""
     chapter_count: int = 10
     mode: Literal["preserve", "adapt"] | None = None
+    instruction: str = ""
     sources: list[SourceDigest] = Field(default_factory=list)
 
 
@@ -140,6 +143,16 @@ class ChatRequest(Model):
 class ChatResponse(Model):
     reply: str
     revised_chapter: list[str] | None = None
+
+
+# --- reading images ---------------------------------------------------------
+
+
+class PageText(Model):
+    """The text of one uploaded page image. Structure is kept as markup in the paragraphs."""
+
+    title: str | None = None
+    paragraphs: list[str]
 
 
 # --- illustration -----------------------------------------------------------

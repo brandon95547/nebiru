@@ -149,6 +149,8 @@ provider's reason. They are never replaced by stand-in output.
 | --- | --- |
 | Library; books saved on the server | Working |
 | Import: EPUB, PDF, DOCX, TXT, Markdown, HTML | Working, parsed in the browser |
+| Import: photos and scans of pages (JPEG, PNG, HEIC, WebP, TIFF) | Working. The writing model reads each page and keeps its title, section headings, numbered lists and verse lines |
+| An instruction with an import ("a new illustrated table of contents in a gothic design") | Working. It guides the plan and what the illustrations show |
 | Import: MOBI/AZW, audio, video | Recognised, but conversion and transcription are not built |
 | Planning, conversational outline edits | Working with DeepSeek |
 | Chapter writing, per-chapter regeneration, adaptation of imported material | Working with DeepSeek |
@@ -218,6 +220,7 @@ server/
     text_service.py    Planning, chapter writing, revision, chat
     comfy.py           ComfyUI client and the built-in workflows (FLUX, checkpoint)
     styles.py          The prompt language behind each illustration style
+    vision.py          Reads the text of an uploaded page image
     library.py         Book storage
     downloads.py       Reads the model download's progress
     schemas.py         Request and response shapes

@@ -12,7 +12,8 @@ import httpx
 from .config import Settings
 from .errors import NotConfigured, ServiceError
 
-Message = dict[str, str]
+# A message's content is text, or a list of text and image parts.
+Message = dict[str, Any]
 
 MAX_CONTINUATIONS = 3
 JSON_TOKEN_CEILING = 16000
@@ -43,7 +44,13 @@ class DeepSeek:
         self._client = client
 
     async def _complete(
-        self, messages: list[Message], *, max_tokens: int, temperature: float, json_mode: bool = False
+        self,
+        messages: list[Message],
+        *,
+        max_tokens: int,
+        temperature: float,
+        json_mode: bool = False,
+        vision: bool = False,
     ) -> tuple[str, str | None]:
         """One completion. Returns the content and the reason generation stopped."""
         settings = self._settings
@@ -51,7 +58,7 @@ class DeepSeek:
             raise NotConfigured(settings.text_problem)
 
         payload: dict[str, Any] = {
-            "model": settings.deepseek_model,
+            "model": (settings.deepseek_vision_model if vision else "") or settings.deepseek_model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -109,13 +116,18 @@ class DeepSeek:
         raise ServiceError(failure)
 
     async def text(
-        self, messages: list[Message], *, max_tokens: int = 8000, temperature: float = 0.7
+        self, messages: list[Message], *, max_tokens: int = 8000, temperature: float = 0.7, vision: bool = False
     ) -> str:
-        """Prose of any length: when the model hits its limit it is asked to carry on."""
+        """Prose of any length: when the model hits its limit it is asked to carry on.
+
+        `vision` marks a request that carries an image, so it goes to the model that reads them.
+        """
         conversation = list(messages)
         pieces: list[str] = []
         for _ in range(MAX_CONTINUATIONS + 1):
-            content, finish = await self._complete(conversation, max_tokens=max_tokens, temperature=temperature)
+            content, finish = await self._complete(
+                conversation, max_tokens=max_tokens, temperature=temperature, vision=vision
+            )
             pieces.append(content)
             if finish != "length":
                 break

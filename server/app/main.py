@@ -35,6 +35,7 @@ from .schemas import (
     IllustrationResponse,
     OutlineRequest,
     OutlineResponse,
+    PageText,
     PlanRequest,
     ReviseRequest,
     ReviseResponse,
@@ -42,6 +43,7 @@ from .schemas import (
     Status,
 )
 from .text_service import TextService
+from .vision import read_page
 
 BALANCE_CACHE_S = 120.0
 
@@ -173,6 +175,12 @@ def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTrans
     @api.post("/text/chat", response_model=ChatResponse)
     async def chat(body: ChatRequest, request: Request) -> ChatResponse:
         return await services(request).text.chat(body)
+
+    @api.post("/import/image", response_model=PageText)
+    async def import_image(request: Request) -> PageText:
+        """Read the text of a page image. The request body is the image file itself."""
+        title, paragraphs = await read_page(services(request).deepseek, await request.body())
+        return PageText(title=title, paragraphs=paragraphs)
 
     @api.post("/illustrations", response_model=IllustrationResponse)
     async def illustrate(body: IllustrationRequest, request: Request) -> IllustrationResponse:

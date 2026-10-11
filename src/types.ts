@@ -83,8 +83,11 @@ export interface SourceDocument {
 
 export type BookOrigin =
   | { kind: 'concept'; concept: string }
-  /** preserve: lay out the imported text as written. adapt: write new prose from it. */
-  | { kind: 'import'; mode: 'preserve' | 'adapt' }
+  /**
+   * preserve: lay out the imported text as written. adapt: write new prose from it.
+   * `instruction` is what the author asked Nebiru to make from the material.
+   */
+  | { kind: 'import'; mode: 'preserve' | 'adapt'; instruction?: string }
 
 export interface CoverArt {
   src: string
