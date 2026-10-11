@@ -104,19 +104,37 @@ def _source_index(request: PlanRequest) -> str:
     return "\n".join(blocks)
 
 
-def plan_adaptation(request: PlanRequest) -> list[dict[str, str]]:
-    user = f"""The author has imported source material and wants to write an original adaptation of it: a new book with its own prose and its own organisation, built on the ideas, facts and events in the source.
+def plan_reworded(request: PlanRequest) -> list[dict[str, str]]:
+    user = f"""The author has imported a text and is making a new book from it: one that says exactly what the original says, section by section and in the same order, in entirely different words. The planning screen needs a title and description for the new book and, for each section, a chapter title and a short summary.
 
 Here is an index of the source. Each line gives a section id in square brackets, its title, its length and how it opens.
 
 {_source_index(request)}{_request_note(request)}
 
-Plan the new book. Return a JSON object with these keys:
-- "title": a title for the new book, its own rather than a copy of the source's.
+Return a JSON object with these keys:
+- "title": a title for the new book, in different words from the source's own title.
 - "description": two or three sentences in the voice of a back-cover blurb.
-- "chapters": an array of objects, each with "title", "summary" and "sourceSectionIds".
+- "chapters": an object mapping each section id, copied exactly, to an object with "title" and "summary".
 
-Organise the book the way that serves a reader best, which need not follow the source's order or divisions: merge thin sections, split overloaded ones, drop front matter such as copyright pages and tables of contents. Use as many chapters as the material needs. Chapter titles carry no "Chapter 1" numbering. Each summary is one to three sentences on what the chapter will cover. "sourceSectionIds" lists the ids of the source sections that chapter draws on, copied exactly from the index; a section may feed more than one chapter."""
+Each chapter title names what its section covers in your own words rather than repeating the source's heading, and carries no "Chapter 1" numbering. Where a section is plainly front or back matter (an introduction, a dedication, a table of contents, a copyright notice), give it that plain label. Each summary is one sentence based on the section's title and opening."""
+    return [{"role": "system", "content": ROLE}, {"role": "user", "content": user}]
+
+
+def reword_passage(brief: Brief, chapter_title: str, passage: str) -> list[dict[str, str]]:
+    user = f"""{_book_card(brief)}
+
+The author is making a new book that says exactly what an existing text says, in entirely different words. This passage is from the part that becomes the chapter “{chapter_title}”.
+
+PASSAGE:
+{passage}
+
+Rewrite the passage. Carry over everything it says: every fact, idea, instruction, example, name and event, in the same order and at about the same length, so that a reader learns from your version exactly what they would have learned from the original. Carry over none of its wording: build new sentences with their own structure and vocabulary rather than swapping in synonyms, so that no sentence and no distinctive phrase of the original remains. Keep proper names, numbers, dates and technical terms as they are, and keep anything the passage quotes from someone else as a quotation.
+
+Do not summarise, shorten, comment, or add anything the passage does not say. Do not sharpen or soften what it says either: a quantity, a condition or a degree of certainty stays exactly what it was.
+
+Keep the passage's layout. A line starting with "## " is a heading: keep the marker and reword the heading. A line starting with a number and a full stop, such as "3. ", or with "- ", is a list entry: keep the marker and reword the entry. Where the passage sets lines of verse on separate lines, write the same number of lines. Separate paragraphs with one blank line. Give the passage no title or heading it does not already have.
+
+Return only the rewritten passage."""
     return [{"role": "system", "content": ROLE}, {"role": "user", "content": user}]
 
 
@@ -172,10 +190,9 @@ def write_chapter(
     ]
     if source_text:
         parts.append(
-            "This chapter is part of an original adaptation. The source material it draws on follows. Take "
-            "its ideas, facts, events and sequence as your raw material and write the chapter in your own "
-            "words and with your own structure: do not reuse the source's sentences or follow it paragraph "
-            "by paragraph, and do not invent facts it does not support.\n\n"
+            "This chapter restates existing source material in new words. The source follows. Say what it "
+            "says, in your own sentences and your own wording, following the author's direction where it "
+            "applies; do not reuse the source's sentences, and do not invent facts it does not support.\n\n"
             f"SOURCE MATERIAL:\n{source_text}"
         )
     if instruction:

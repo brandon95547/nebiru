@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
 from .config import Settings
 from .deepseek import DeepSeek
 from .errors import ServiceError
+from .markup import parse_marked_text
 from . import prompts
 from .schemas import (
     BookPlan,
@@ -25,8 +27,13 @@ from .schemas import (
     ReviseResponse,
 )
 
-# Enough of a chapter's source to adapt from without overrunning the model's context.
+# Enough of a chapter's source to write from without overrunning the model's context.
 SOURCE_WORD_BUDGET = 20000
+# Rewording goes passage by passage. Asked to reword a whole long chapter at once, a
+# model shortens it; given a page or two at a time it keeps everything.
+REWORD_CHUNK_WORDS = 900
+REWORD_AT_ONCE = 4
+ILLUSTRATION_SAMPLE_WORDS = 2500
 CHAT_HISTORY_TURNS = 16
 
 REVISION_TEMPERATURE = {"grammar": 0.1, "shorten": 0.4, "rewrite": 0.7, "expand": 0.7, "style": 0.8}
@@ -94,6 +101,26 @@ def _within_budget(paragraphs: list[str], budget: int) -> str:
     return "\n\n".join(kept)
 
 
+def chunk_paragraphs(paragraphs: list[str], target_words: int) -> list[list[str]]:
+    """Group paragraphs into passages of roughly `target_words`, never parting a heading from what it heads."""
+    chunks: list[list[str]] = []
+    current: list[str] = []
+    words = 0
+    for paragraph in paragraphs:
+        current.append(paragraph)
+        words += len(paragraph.split())
+        if words >= target_words and not paragraph.startswith("#"):
+            chunks.append(current)
+            current, words = [], 0
+    if current:
+        # A heading left alone at the very end belongs with the passage before it.
+        if chunks and all(p.startswith("#") for p in current):
+            chunks[-1].extend(current)
+        else:
+            chunks.append(current)
+    return chunks
+
+
 def _text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
@@ -124,16 +151,13 @@ class TextService:
         self._settings = settings
 
     async def plan(self, request: PlanRequest) -> BookPlan:
-        if request.kind == "import" and request.mode == "preserve":
-            return await self._plan_preserved(request)
+        if request.kind == "import":
+            if request.mode == "preserve":
+                return await self._plan_preserved(request)
+            return await self._plan_reworded(request)
 
-        if request.kind == "concept":
-            data = await self._deepseek.json(prompts.plan_from_concept(request), temperature=0.8)
-            chapters = _planned(data.get("chapters"))
-        else:
-            known = {section.id for source in request.sources for section in source.sections}
-            data = await self._deepseek.json(prompts.plan_adaptation(request), max_tokens=6000, temperature=0.6)
-            chapters = _planned(data.get("chapters"), known)
+        data = await self._deepseek.json(prompts.plan_from_concept(request), temperature=0.8)
+        chapters = _planned(data.get("chapters"))
         if not chapters:
             raise ServiceError("DeepSeek returned a plan with no chapters.")
         return BookPlan(
@@ -163,6 +187,29 @@ class TextService:
             chapters=chapters,
         )
 
+    async def _plan_reworded(self, request: PlanRequest) -> BookPlan:
+        """Saying the same thing in new words: one chapter per source section, in order, newly titled."""
+        data = await self._deepseek.json(prompts.plan_reworded(request), max_tokens=8000, temperature=0.6)
+        named = data.get("chapters") if isinstance(data.get("chapters"), dict) else {}
+        chapters = []
+        for source in request.sources:
+            for section in source.sections:
+                entry = named.get(section.id) if isinstance(named.get(section.id), dict) else {}
+                chapters.append(
+                    PlannedChapter(
+                        title=_text(entry.get("title")) or section.title or f"Chapter {len(chapters) + 1}",
+                        summary=_text(entry.get("summary")),
+                        source_section_ids=[section.id],
+                    )
+                )
+        if not chapters:
+            raise ServiceError("There is nothing in the imported material to plan from.", status=400)
+        return BookPlan(
+            title=_text(data.get("title")) or "Untitled",
+            description=_text(data.get("description")),
+            chapters=chapters,
+        )
+
     async def revise_outline(self, request: OutlineRequest) -> OutlineResponse:
         data = await self._deepseek.json(
             prompts.revise_outline(request.brief, request.instruction), max_tokens=6000, temperature=0.4
@@ -181,6 +228,8 @@ class TextService:
         brief = request.brief
         if not 0 <= request.chapter_index < len(brief.chapters):
             raise ServiceError("That chapter is not in the book's outline.", status=400)
+        if brief.origin.mode in ("reword", "adapt") and request.source_paragraphs and not request.instruction:
+            return await self._reword_chapter(request)
         text = await self._deepseek.text(
             prompts.write_chapter(
                 brief,
@@ -192,6 +241,47 @@ class TextService:
             temperature=0.8,
         )
         return parse_chapter(text, brief.chapters[request.chapter_index].title)
+
+    async def _reword_chapter(self, request: ChapterRequest) -> ChapterDraft:
+        """The chapter's source, said again in new words, a passage at a time."""
+        brief = request.brief
+        title = brief.chapters[request.chapter_index].title
+        gate = asyncio.Semaphore(REWORD_AT_ONCE)
+
+        async def reword(passage: list[str]) -> list[str]:
+            async with gate:
+                text = await self._deepseek.text(
+                    prompts.reword_passage(brief, title, "\n\n".join(passage)), temperature=0.6
+                )
+            reworded = parse_marked_text(text)[1]
+            if not any(p.startswith("#") for p in passage):
+                # Knowing the chapter's title, the model sometimes opens with a heading the passage never had.
+                reworded = [p for p in reworded if not p.startswith("#")]
+            return reworded
+
+        passages = chunk_paragraphs(request.source_paragraphs, REWORD_CHUNK_WORDS)
+        paragraphs = [p for reworded in await asyncio.gather(*map(reword, passages)) for p in reworded]
+        if not paragraphs:
+            raise ServiceError("DeepSeek returned a chapter with no text.")
+
+        words = " ".join(paragraphs).split()
+        try:
+            pictures = await self.illustration_prompts(
+                IllustrationPromptsRequest(
+                    brief=brief,
+                    chapter_index=request.chapter_index,
+                    text=" ".join(words[:ILLUSTRATION_SAMPLE_WORDS]),
+                    count=2 if len(words) > ILLUSTRATION_SAMPLE_WORDS else 1,
+                )
+            )
+        except ServiceError as error:
+            # The chapter is written; losing the illustration ideas is no reason to lose it.
+            return ChapterDraft(
+                paragraphs=paragraphs,
+                illustration_prompts=[],
+                note=f"No illustrations were planned: {error.message}",
+            )
+        return ChapterDraft(paragraphs=paragraphs, illustration_prompts=pictures.prompts)
 
     async def illustration_prompts(self, request: IllustrationPromptsRequest) -> IllustrationPromptsResponse:
         if not 0 <= request.chapter_index < len(request.brief.chapters):

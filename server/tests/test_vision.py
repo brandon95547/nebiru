@@ -7,7 +7,12 @@ import httpx
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.vision import parse_transcript, prepare_image
+from app.markup import parse_marked_text
+from app.vision import prepare_image
+
+
+def parse_transcript(text: str):
+    return parse_marked_text(text, take_title=True)
 
 from .conftest import BRIEF, Recorder, completion
 

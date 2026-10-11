@@ -71,15 +71,44 @@ def test_plan_preserved_keeps_the_sources_own_sections(client: TestClient, netwo
     ]
 
 
-def test_plan_adaptation_drops_section_ids_the_source_does_not_have(client: TestClient, network: Recorder) -> None:
+def test_plan_for_a_reworded_book_keeps_the_sources_sections_under_new_titles(client: TestClient, network: Recorder) -> None:
     network.reply_with(
-        completion(json.dumps({"title": "New", "description": "d", "chapters": [{"title": "One", "summary": "s", "sourceSectionIds": ["s1", "made-up"]}]}))
+        completion(
+            json.dumps(
+                {
+                    "title": "Tides and Lanterns",
+                    "description": "A sea tale, retold.",
+                    "chapters": {"s1": {"title": "Fog over the Quay", "summary": "The harbour at dawn."}, "zz": {"title": "unknown id"}},
+                }
+            )
+        )
     )
     response = client.post(
         "/api/text/plan",
-        json={"kind": "import", "mode": "adapt", "sources": [{"name": "a.txt", "sections": [{"id": "s1", "title": "A", "wordCount": 10, "excerpt": "x"}]}]},
+        json={
+            "kind": "import",
+            "mode": "reword",
+            "sources": [
+                {
+                    "name": "sea.epub",
+                    "title": "Sea Stories",
+                    "sections": [
+                        {"id": "s1", "title": "The Harbour", "wordCount": 900, "excerpt": "Fog lay on the water."},
+                        {"id": "s2", "title": "Open Sea", "wordCount": 400, "excerpt": "The wind rose."},
+                    ],
+                }
+            ],
+        },
     )
-    assert response.json()["chapters"][0]["sourceSectionIds"] == ["s1"]
+    plan = response.json()
+    # A new title for the new book, one chapter per section in the source's order.
+    assert plan["title"] == "Tides and Lanterns"
+    assert plan["chapters"] == [
+        {"id": None, "title": "Fog over the Quay", "summary": "The harbour at dawn.", "sourceSectionIds": ["s1"]},
+        # A section the model did not name keeps the source's heading.
+        {"id": None, "title": "Open Sea", "summary": "", "sourceSectionIds": ["s2"]},
+    ]
+    assert "in entirely different words" in network.bodies("chat/completions")[0]["messages"][1]["content"]
 
 
 def test_truncated_json_is_retried_with_a_larger_budget(client: TestClient, network: Recorder) -> None:
@@ -111,6 +140,7 @@ def test_write_chapter_splits_prose_from_illustration_prompts(client: TestClient
             "A girl and her grandmother lifting a long box on a porch at dusk.",
             "A telescope on a lawn under the first stars.",
         ],
+        "note": None,
     }
     prompt = network.bodies("chat/completions")[0]["messages"][1]["content"]
     assert "<- this chapter" in prompt and "about 1200 words" in prompt
@@ -128,16 +158,83 @@ def test_a_chapter_cut_off_by_the_length_limit_is_continued(client: TestClient, 
     assert "Continue from exactly where it stopped" in follow_up[-1]["content"]
 
 
-def test_adaptation_sends_the_source_material(client: TestClient, network: Recorder) -> None:
+REWORD = {**BRIEF, "origin": {"kind": "import", "mode": "reword"}}
+
+
+def rewording(network: Recorder, pictures: httpx.Response | None = None) -> None:
+    """A fake model that 'rewords' a passage by upper-casing it, so the test can see what went where."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        prompt = body["messages"][-1]["content"]
+        if "response_format" in body:
+            return pictures or completion(json.dumps({"prompts": ["A lighthouse in fog."]}))
+        passage = prompt.split("PASSAGE:\n", 1)[1].split("\n\nRewrite the passage.", 1)[0]
+        return completion(passage.upper())
+
+    network.handler = handler
+
+
+def test_rewording_a_chapter_goes_passage_by_passage_and_keeps_order_and_layout(client: TestClient, network: Recorder) -> None:
+    rewording(network)
+    long = " ".join(["word"] * 500)
+    source = [f"one {long}", "## A heading", f"two {long}", "1. first entry", "2. second entry", "a line of verse\nand another", f"three {long}"]
+    draft = client.post("/api/text/chapter", json={"brief": REWORD, "chapterIndex": 0, "sourceParagraphs": source}).json()
+
+    assert draft["paragraphs"] == [p.upper() for p in source]
+    assert draft["illustrationPrompts"] == ["A lighthouse in fog."]
+    assert draft["note"] is None
+    passages = [b for b in network.bodies("chat/completions") if "response_format" not in b]
+    # 1,500+ words of source is more than one passage; nothing is dropped between them.
+    assert len(passages) == 2
+    assert all("Carry over none of its wording" in p["messages"][1]["content"] for p in passages)
+    # A passage never ends on a heading: the heading stays with the text it heads.
+    assert "## A heading\n\ntwo word" in passages[0]["messages"][1]["content"]
+    assert "1. first entry\n\n2. second entry\n\na line of verse\nand another" in passages[1]["messages"][1]["content"]
+
+
+def test_a_reworded_passage_gains_no_heading_of_its_own(client: TestClient, network: Recorder) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "response_format" in json.loads(request.content):
+            return completion(json.dumps({"prompts": ["A seed tray."]}))
+        return completion("## Sowing by the Calendar\n\nBegin with the tough kinds.")
+
+    network.handler = handler
+    draft = client.post("/api/text/chapter", json={"brief": REWORD, "chapterIndex": 0, "sourceParagraphs": ["Sow hardy crops first."]}).json()
+    assert draft["paragraphs"] == ["Begin with the tough kinds."]
+
+
+def test_a_reworded_chapter_survives_losing_its_illustration_ideas(client: TestClient, network: Recorder) -> None:
+    rewording(network, pictures=httpx.Response(402, json={"error": {"message": "Insufficient Balance"}}))
+    draft = client.post("/api/text/chapter", json={"brief": REWORD, "chapterIndex": 0, "sourceParagraphs": ["Some text."]}).json()
+    assert draft["paragraphs"] == ["SOME TEXT."]
+    assert draft["illustrationPrompts"] == []
+    assert draft["note"] == "No illustrations were planned: The DeepSeek account has no balance left (HTTP 402)."
+
+
+def test_regenerating_a_reworded_chapter_with_a_direction_writes_from_the_source(client: TestClient, network: Recorder) -> None:
     network.reply_with(completion("New prose.\n\n===ILLUSTRATIONS===\nA scene."))
-    brief = {**BRIEF, "origin": {"kind": "import", "mode": "adapt"}}
     client.post(
         "/api/text/chapter",
-        json={"brief": brief, "chapterIndex": 0, "sourceParagraphs": ["Source one.", "Source two."], "instruction": "Open with the storm"},
+        json={"brief": REWORD, "chapterIndex": 0, "sourceParagraphs": ["Source one.", "Source two."], "instruction": "Open with the storm"},
     )
     prompt = network.bodies("chat/completions")[0]["messages"][1]["content"]
     assert "SOURCE MATERIAL:\nSource one.\n\nSource two." in prompt
+    assert "do not reuse the source's sentences" in prompt
     assert "Open with the storm" in prompt
+
+
+def test_chunk_paragraphs_keeps_headings_with_their_text() -> None:
+    from app.text_service import chunk_paragraphs
+
+    hundred = " ".join(["w"] * 100)
+    assert chunk_paragraphs([], 200) == []
+    assert chunk_paragraphs(["short"], 200) == [["short"]]
+    assert chunk_paragraphs([hundred, hundred, hundred], 200) == [[hundred, hundred], [hundred]]
+    # A chunk never ends on a heading, and a trailing heading joins the passage before it.
+    assert chunk_paragraphs([hundred, hundred, "## Next", hundred], 200) == [[hundred, hundred], ["## Next", hundred]]
+    assert chunk_paragraphs([hundred, "## Mid", hundred, hundred], 200) == [[hundred, "## Mid", hundred], [hundred]]
+    assert chunk_paragraphs([hundred, hundred, "## Dangling"], 200) == [[hundred, hundred, "## Dangling"]]
 
 
 def test_chapter_index_outside_the_outline_is_a_bad_request(client: TestClient) -> None:

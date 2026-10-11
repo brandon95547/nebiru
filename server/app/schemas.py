@@ -18,7 +18,9 @@ class Model(BaseModel):
 class Origin(Model):
     kind: Literal["concept", "import"]
     concept: str = ""
-    mode: Literal["preserve", "adapt"] | None = None
+    # preserve: the imported text as written. reword: the same content in new words.
+    # ("adapt" is the old name for reword, still accepted from books made before the rename.)
+    mode: Literal["preserve", "reword", "adapt"] | None = None
     # What the author asked Nebiru to make from imported material.
     instruction: str = ""
 
@@ -69,7 +71,7 @@ class PlanRequest(Model):
     kind: Literal["concept", "import"]
     concept: str = ""
     chapter_count: int = 10
-    mode: Literal["preserve", "adapt"] | None = None
+    mode: Literal["preserve", "reword", "adapt"] | None = None
     instruction: str = ""
     sources: list[SourceDigest] = Field(default_factory=list)
 
@@ -103,6 +105,8 @@ class ChapterRequest(Model):
 class ChapterDraft(Model):
     paragraphs: list[str]
     illustration_prompts: list[str]
+    # Something the author should know about a chapter that was still produced.
+    note: str | None = None
 
 
 class IllustrationPromptsRequest(Model):
@@ -163,6 +167,8 @@ class IllustrationRequest(Model):
     style_id: str
     aspect: float = Field(gt=0.2, lt=5)
     purpose: Literal["interior", "cover"] = "interior"
+    # The book's pages: pictures for dark pages are drawn on a dark ground.
+    theme: Literal["light", "dark"] = "light"
     seed: int | None = None
 
 
