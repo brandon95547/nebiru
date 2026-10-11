@@ -125,7 +125,12 @@ Other things worth knowing:
   `COMPOSE_FILE=docker-compose.yml:docker-compose.cpu.yml`.
 - **A GPU that is already in use.** `./nebiru setup` picks the quantization
   from the card's total memory, not from what is free. If other services
-  already hold part of it, set `FLUX_QUANT` to a smaller size by hand.
+  already hold part of it, set `FLUX_QUANT` to a smaller size by hand, set
+  `COMFYUI_ARGS=--cache-none --reserve-vram 2` so ComfyUI lets go of its models
+  after each picture, and cap its RAM with `COMFYUI_MEMORY_LIMIT`.
+- **Docker that cannot be restarted.** After installing the NVIDIA Container
+  Toolkit, GPU access normally needs a Docker restart. To avoid one, see
+  `docker-compose.nvidia-runtime.yml`.
 - **Your own model files.** Set `NEBIRU_SKIP_MODEL_DOWNLOAD=1` and put them
   under `data/models/` in `diffusion_models/`, `text_encoders/` and `vae/`.
 - **Your own workflow.** Export one from ComfyUI in API format, save it under

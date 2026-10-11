@@ -79,6 +79,9 @@ services:
     volumes:
       - ${NEBIRU_DATA:-./data}/models:/opt/ComfyUI/models
       - ${NEBIRU_DATA:-./data}/comfyui:/data
+    # Cap on ComfyUI's RAM, e.g. 8g, so it cannot starve other services on a
+    # shared machine. 0 = no cap.
+    mem_limit: ${COMFYUI_MEMORY_LIMIT:-0}
     deploy:
       resources:
         reservations:
