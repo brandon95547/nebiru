@@ -5,15 +5,19 @@ set -e
 
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
-MODELS=/opt/ComfyUI/models
-DATA=/data
+MODELS="${NEBIRU_MODELS_DIR:-/opt/ComfyUI/models}"
+DATA="${COMFYUI_DATA_DIR:-/data}"
 
-if [ "$(id -u)" = "0" ]; then
+# The first pass runs as root, fixes ownership and starts this script again as
+# PUID. The marker is what ends the first pass: checking "am I root?" alone
+# would loop forever when PUID is 0, because the second pass is root too.
+if [ "$(id -u)" = "0" ] && [ -z "$NEBIRU_PRIVILEGES_SET" ]; then
   mkdir -p "$MODELS" "$DATA"
   # Docker creates a missing bind-mount folder as root; fix whatever is not ours.
   for folder in "$MODELS" "$DATA"; do
     find "$folder" -maxdepth 1 ! -user "$PUID" -exec chown -R "$PUID:$PGID" {} + 2>/dev/null || true
   done
+  export NEBIRU_PRIVILEGES_SET=1
   exec setpriv --reuid "$PUID" --regid "$PGID" --clear-groups "$0" "$@"
 fi
 
